@@ -1,11 +1,12 @@
-const CACHE = 'apiary-v3';
+const CACHE = 'apiary-v4';
+const BASE = self.registration.scope;
 const ASSETS = [
-    '/apiary-game/',
-    '/apiary-game/index.html',
-    '/apiary-game/manifest.json',
-    '/apiary-game/phaser.min.js',
-    '/apiary-game/icons/icon-192.png',
-    '/apiary-game/icons/icon-512.png',
+    BASE,
+    BASE + 'index.html',
+    BASE + 'manifest.json',
+    BASE + 'phaser.min.js',
+    BASE + 'icons/icon-192.png',
+    BASE + 'icons/icon-512.png',
 ];
 
 self.addEventListener('install', e => {
