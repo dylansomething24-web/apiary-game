@@ -1,11 +1,11 @@
-const CACHE = 'apiary-v2';
+const CACHE = 'apiary-v3';
 const ASSETS = [
-    '/',
-    '/index.html',
-    '/manifest.json',
-    '/phaser.min.js',
-    '/icons/icon-192.png',
-    '/icons/icon-512.png',
+    '/apiary-game/',
+    '/apiary-game/index.html',
+    '/apiary-game/manifest.json',
+    '/apiary-game/phaser.min.js',
+    '/apiary-game/icons/icon-192.png',
+    '/apiary-game/icons/icon-512.png',
 ];
 
 self.addEventListener('install', e => {
