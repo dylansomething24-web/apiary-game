@@ -1,9 +1,11 @@
-const CACHE = 'apiary-v1';
+const CACHE = 'apiary-v2';
 const ASSETS = [
     '/',
     '/index.html',
     '/manifest.json',
-    'https://cdnjs.cloudflare.com/ajax/libs/phaser/3.60.0/phaser.min.js',
+    '/phaser.min.js',
+    '/icons/icon-192.png',
+    '/icons/icon-512.png',
 ];
 
 self.addEventListener('install', e => {
