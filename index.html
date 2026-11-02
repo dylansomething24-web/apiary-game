@@ -10,1024 +10,780 @@
     <meta name="apple-mobile-web-app-title" content="The Apiary">
     <link rel="apple-touch-icon" href="icons/icon-192.png">
     <meta name="theme-color" content="#080f08">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600&family=Crimson+Pro:ital,wght@0,300;0,400;0,600;1,300&display=swap" rel="stylesheet">
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-        html, body { width: 100%; height: 100%; background: #080f08; overflow: hidden; touch-action: none; }
-        canvas { display: block; }
+        * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+        html, body { width:100%; height:100%; background:#080f08; overflow:hidden; touch-action:none; }
+        canvas { display:block; }
 
         #hud {
-            position: fixed; top: 0; left: 0; right: 0; z-index: 50;
-            display: flex; justify-content: space-between; align-items: flex-start;
-            padding-top: max(env(safe-area-inset-top, 0px), 12px);
-            padding-left: 20px; padding-right: 20px;
-            pointer-events: none;
-            background: linear-gradient(to bottom, rgba(8,15,8,0.9) 60%, transparent);
-            padding-bottom: 20px;
+            position:fixed; top:0; left:0; right:0; z-index:50;
+            display:flex; justify-content:space-between; align-items:flex-start;
+            padding-top:max(env(safe-area-inset-top,0px),14px);
+            padding-left:20px; padding-right:20px; padding-bottom:22px;
+            pointer-events:none;
+            background:linear-gradient(to bottom,rgba(5,10,5,0.96) 55%,transparent);
         }
-        .hud-stat { text-align: center; }
-        .hud-label { font: 600 9px/1 'Courier New', monospace; letter-spacing: 2px; text-transform: uppercase; color: #4a7040; }
-        .hud-value { font: 700 26px/1.1 'Courier New', monospace; color: #e09a18; letter-spacing: 1px; text-shadow: 0 0 12px rgba(224,154,24,0.4); }
-        .hud-center { text-align: center; padding-top: 2px; }
-        .hud-season { font: 400 14px/1 Georgia, serif; color: #c8a860; letter-spacing: 1px; }
-        .hud-day    { font: 400 11px/1.4 'Courier New', monospace; color: #3a5a30; letter-spacing: 1px; margin-top: 2px; }
+        .hud-stat { text-align:center; }
+        .hud-label { font:600 8px/1 'Courier New',monospace; letter-spacing:2.5px; text-transform:uppercase; color:#2a4a28; }
+        .hud-value { font:600 28px/1.1 'Courier New',monospace; color:#e09a18; text-shadow:0 0 14px rgba(224,154,24,.45); }
+        .hud-center { text-align:center; padding-top:2px; }
+        .hud-season { font-family:'Cinzel','Palatino Linotype',Georgia,serif; font-size:16px; color:#c8a860; letter-spacing:.5px; }
+        .hud-day    { font:300 11px/1.5 'Courier New',monospace; color:#3a5a30; letter-spacing:1px; margin-top:1px; }
 
-        /* View tabs */
         #view-tabs {
-            position: fixed; top: 68px; left: 50%; transform: translateX(-50%);
-            z-index: 49; display: flex; border: 1px solid #1a3018; border-radius: 20px;
-            background: rgba(8,15,8,0.85); overflow: hidden;
+            position:fixed; top:72px; left:50%; transform:translateX(-50%);
+            z-index:49; display:flex; border:1px solid #1a3018; border-radius:20px;
+            background:rgba(5,10,5,0.9); overflow:hidden;
         }
         .view-tab {
-            padding: 6px 20px; border: none; background: none;
-            font: 400 10px/1 'Courier New', monospace; letter-spacing: 2px; text-transform: uppercase;
-            color: #2a4a28; cursor: pointer;
+            padding:6px 22px; border:none; background:none;
+            font:400 9px/1 'Courier New',monospace; letter-spacing:2.5px; text-transform:uppercase;
+            color:#1e3a1e; cursor:pointer; transition:color .2s,background .2s;
         }
-        .view-tab.active { background: rgba(224,154,24,0.12); color: #c8a040; }
+        .view-tab.active { background:rgba(224,154,24,.12); color:#c8a040; }
 
-        /* Hive interior subtext */
         #hive-subtext {
-            position: fixed; top: 98px; left: 50%; transform: translateX(-50%);
-            z-index: 48; pointer-events: none; display: none;
-            font: 400 10px/1 'Courier New', monospace; color: #2a4a28; letter-spacing: 1px;
-            white-space: nowrap;
+            position:fixed; top:106px; left:50%; transform:translateX(-50%);
+            z-index:48; pointer-events:none; display:none;
+            font:300 10px/1 'Courier New',monospace; color:#2a4228; letter-spacing:1px; white-space:nowrap;
         }
 
-        /* Toasts */
         #toast-container {
-            position: fixed; top: 110px; left: 50%; transform: translateX(-50%);
-            z-index: 100; display: flex; flex-direction: column; align-items: center;
-            gap: 8px; pointer-events: none; width: calc(100% - 40px); max-width: 320px;
+            position:fixed; top:116px; left:50%; transform:translateX(-50%);
+            z-index:100; display:flex; flex-direction:column; align-items:center; gap:7px;
+            pointer-events:none; width:calc(100% - 40px); max-width:300px;
         }
         .toast {
-            background: rgba(5,10,5,0.96); border: 1px solid #1a3a18; border-radius: 6px;
-            padding: 10px 16px; font: 400 12px/1.5 'Courier New', monospace; color: #70a060;
-            text-align: center; width: 100%;
-            animation: toast-in .25s ease, toast-out .35s ease 2.65s forwards;
+            background:rgba(5,10,5,0.97); border:1px solid #1a3a18; border-radius:5px;
+            padding:10px 16px; text-align:center; width:100%;
+            font:400 13px/1.5 'Crimson Pro','Palatino Linotype',Georgia,serif; color:#70a060;
+            animation:toast-in .2s ease, toast-out .3s ease 2.7s forwards;
         }
-        .toast.warn   { color: #d09020; border-color: rgba(208,144,32,0.4); }
-        .toast.danger { color: #d04040; border-color: rgba(208,64,64,0.4); }
-        @keyframes toast-in  { from { opacity:0; transform:translateY(-8px); } to { opacity:1; } }
-        @keyframes toast-out { to   { opacity:0; transform:translateY(-8px); } }
+        .toast.warn   { color:#d09020; border-color:rgba(208,144,32,.4); }
+        .toast.danger { color:#d04040; border-color:rgba(208,64,64,.4); }
+        .toast.mile   { color:#e0bc40; border-color:rgba(224,188,64,.5); font-size:14px; font-style:italic; }
+        @keyframes toast-in  { from{opacity:0;transform:translateY(-8px)} to{opacity:1;transform:none} }
+        @keyframes toast-out { to  {opacity:0;transform:translateY(-8px)} }
 
-        /* Tile panel */
         #tile-panel {
-            position: fixed; bottom: 0; left: 0; right: 0; z-index: 50;
-            background: linear-gradient(to top, #050c05 80%, rgba(5,12,5,0.95));
-            border-top: 1px solid #1e3820;
-            padding: 20px 20px calc(20px + env(safe-area-inset-bottom, 0px));
-            transform: translateY(100%);
-            transition: transform 0.28s cubic-bezier(0.32, 0, 0.67, 0);
-            will-change: transform;
+            position:fixed; bottom:0; left:0; right:0; z-index:50;
+            background:linear-gradient(to top,#050c05 80%,rgba(5,12,5,.97));
+            border-top:1px solid #1e3820;
+            padding:20px 22px calc(20px + env(safe-area-inset-bottom,0px));
+            transform:translateY(100%);
+            transition:transform .28s cubic-bezier(.32,0,.67,0);
+            will-change:transform;
         }
-        #tile-panel.open { transform: translateY(0); transition: transform 0.28s cubic-bezier(0.33, 1, 0.68, 1); }
-        .panel-row-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
-        .panel-tile-name { font: 400 20px/1 Georgia, serif; color: #e09a18; }
-        .panel-close { background: none; border: none; color: #2a4a28; font-size: 26px; line-height: 1; cursor: pointer; padding: 0 2px; margin-top: -4px; }
-        .panel-stage { display: inline-block; font: 600 10px/1 'Courier New', monospace; letter-spacing: 2px; text-transform: uppercase; padding: 4px 12px; border-radius: 20px; margin-bottom: 12px; }
-        .stage-0 { background: rgba(40,20,10,.5); color: #7a5040; border: 1px solid #3a2010; }
-        .stage-1 { background: rgba(60,50,15,.5); color: #a09030; border: 1px solid #5a4820; }
-        .stage-2 { background: rgba(30,60,20,.5); color: #80b040; border: 1px solid #406030; }
-        .stage-3 { background: rgba(20,80,30,.5); color: #50d870; border: 1px solid #308840; }
-        .panel-detail { font: 400 13px/1.7 'Courier New', monospace; color: #5a7a50; white-space: pre-line; margin-bottom: 14px; }
-        .panel-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+        #tile-panel.open { transform:translateY(0); transition:transform .28s cubic-bezier(.33,1,.68,1); }
+        .panel-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:6px; }
+        .panel-tile-name { font-family:'Cinzel','Palatino Linotype',Georgia,serif; font-size:20px; color:#e09a18; }
+        .panel-close { background:none; border:none; color:#2a4228; font-size:28px; line-height:1; cursor:pointer; padding:0 2px; margin-top:-6px; }
+        .panel-stage { display:inline-block; font:600 9px/1 'Courier New',monospace; letter-spacing:2px; text-transform:uppercase; padding:4px 12px; border-radius:20px; margin-bottom:11px; }
+        .stage-0 { background:rgba(40,20,10,.5); color:#7a5040; border:1px solid #3a2010; }
+        .stage-1 { background:rgba(60,50,15,.5); color:#a09030; border:1px solid #5a4820; }
+        .stage-2 { background:rgba(30,60,20,.5); color:#80b040; border:1px solid #406030; }
+        .stage-3 { background:rgba(20,80,30,.5); color:#50d870; border:1px solid #308840; }
+        .panel-body { font:300 14px/1.8 'Crimson Pro','Palatino Linotype',Georgia,serif; color:#5a7a50; white-space:pre-line; margin-bottom:14px; }
+        .panel-actions { display:flex; gap:8px; flex-wrap:wrap; }
         .action-btn {
-            flex: 1; padding: 11px 8px; min-width: 100px;
-            background: rgba(224,154,24,0.08); border: 1px solid rgba(224,154,24,0.25);
-            border-radius: 6px; color: #c8a040; font: 400 13px/1 Georgia, serif;
-            cursor: pointer; text-align: center;
+            flex:1; padding:12px 8px; min-width:100px;
+            background:rgba(224,154,24,.07); border:1px solid rgba(224,154,24,.22);
+            border-radius:5px; color:#c8a040; cursor:pointer;
+            font:400 14px/1 'Crimson Pro','Palatino Linotype',Georgia,serif; text-align:center;
+            transition:background .15s;
         }
-        .action-btn:active { background: rgba(224,154,24,0.2); }
-        .action-btn.secondary { background: rgba(60,90,40,0.12); border-color: rgba(80,120,50,0.3); color: #608050; }
-        .action-btn:disabled { opacity: 0.4; cursor: default; }
+        .action-btn:active { background:rgba(224,154,24,.2); }
+        .action-btn.secondary { background:rgba(60,90,40,.1); border-color:rgba(80,120,50,.28); color:#608050; }
+        .action-btn.danger-btn { background:rgba(180,60,40,.07); border-color:rgba(180,60,40,.28); color:#c06040; }
+        .action-btn:disabled { opacity:.38; cursor:default; }
 
-        /* Role rows */
-        .role-section { margin-bottom: 12px; }
-        .role-row { display: flex; align-items: center; gap: 8px; padding: 7px 0; border-bottom: 1px solid #0e1a0e; }
-        .role-row:last-child { border-bottom: none; }
-        .role-label { font: 400 12px/1 'Courier New', monospace; color: #5a7a50; flex: 1; }
-        .role-note  { font: 400 10px/1 'Courier New', monospace; color: #2a4a28; }
-        .role-count { font: 700 15px/1 'Courier New', monospace; color: #c8a040; min-width: 26px; text-align: center; }
-        .role-count.warn { color: #d09020; }
+        .role-row { display:flex; align-items:center; gap:8px; padding:8px 0; border-bottom:1px solid #0c180c; }
+        .role-row:last-child { border:none; }
+        .role-label { font:300 14px/1 'Crimson Pro',Georgia,serif; color:#5a7a50; flex:1; }
+        .role-note  { font:300 11px/1 'Courier New',monospace; color:#2a4228; }
+        .role-count { font:600 16px/1 'Courier New',monospace; color:#c8a040; min-width:28px; text-align:center; }
+        .role-count.warn { color:#d09020; }
         .role-btn {
-            background: rgba(224,154,24,0.1); border: 1px solid rgba(224,154,24,0.25);
-            border-radius: 4px; color: #c8a040; font: 700 18px/1 monospace;
-            width: 32px; height: 32px; cursor: pointer;
-            display: flex; align-items: center; justify-content: center;
+            background:rgba(224,154,24,.1); border:1px solid rgba(224,154,24,.25); border-radius:4px;
+            color:#c8a040; font:700 18px/1 monospace; width:34px; height:34px;
+            cursor:pointer; display:flex; align-items:center; justify-content:center;
         }
-        .role-btn:active { background: rgba(224,154,24,0.25); }
+        .role-btn:active { background:rgba(224,154,24,.25); }
 
-        /* Bottom hints */
-        #bottom-hints {
-            position: fixed; bottom: 20px; left: 0; right: 0; z-index: 49;
-            display: flex; justify-content: space-between; padding: 0 20px;
-            pointer-events: none;
+        #goal-bar {
+            position:fixed; bottom:48px; left:50%; transform:translateX(-50%);
+            z-index:48; pointer-events:none;
+            font:300 10px/1 'Courier New',monospace; color:#1e3a1e; letter-spacing:1px; white-space:nowrap;
+        }
+        #goal-bar.near { color:#c87a18; }
+
+        #bottom-bar {
+            position:fixed; bottom:0; left:0; right:0; z-index:49;
+            display:flex; justify-content:space-between; align-items:center;
+            padding:0 20px calc(12px + env(safe-area-inset-bottom,0px)) 20px;
+            pointer-events:none;
         }
         #speed-btn {
-            pointer-events: all; background: rgba(8,15,8,0.85); border: 1px solid #1a3018;
-            border-radius: 20px; padding: 7px 14px;
-            font: 400 12px/1 'Courier New', monospace; color: #3a6030; letter-spacing: 1px; cursor: pointer;
+            pointer-events:all; background:rgba(5,10,5,.88); border:1px solid #1a3018;
+            border-radius:20px; padding:7px 16px;
+            font:400 11px/1 'Courier New',monospace; color:#2a5028; letter-spacing:1px; cursor:pointer;
         }
-        #range-hint { font: 400 10px/1.5 'Courier New', monospace; color: #2a4a28; letter-spacing: 1px; text-align: right; }
+        #range-hint { font:300 10px/1.5 'Courier New',monospace; color:#1a3018; letter-spacing:1px; text-align:right; }
+
+        #swarm-bar {
+            position:fixed; bottom:44px; left:20px; right:20px; z-index:47;
+            display:none; flex-direction:column; gap:3px; pointer-events:none;
+        }
+        #swarm-label { font:300 10px/1 'Courier New',monospace; color:#d09020; letter-spacing:1px; text-align:center; }
+        #swarm-track { height:3px; background:#1a1a0a; border-radius:2px; overflow:hidden; }
+        #swarm-fill  { height:100%; background:linear-gradient(to right,#c87020,#e09a18); border-radius:2px; transition:width .5s; }
+
+        .overlay {
+            position:fixed; inset:0; z-index:200;
+            background:rgba(5,10,5,.96);
+            display:flex; flex-direction:column; align-items:center; justify-content:center;
+            gap:0; padding:40px 30px;
+        }
+        .overlay-title { font-family:'Cinzel','Palatino Linotype',Georgia,serif; font-size:26px; color:#e09a18; text-align:center; margin-bottom:12px; letter-spacing:1px; }
+        .overlay-sub { font:400 16px/1.8 'Crimson Pro','Palatino Linotype',Georgia,serif; color:#6a8a60; text-align:center; margin-bottom:28px; max-width:280px; }
+        .overlay-stat { font:300 13px/2 'Courier New',monospace; color:#3a5a38; text-align:center; margin-bottom:24px; letter-spacing:.5px; }
+        .overlay-btn { padding:14px 40px; background:rgba(224,154,24,.1); border:1px solid rgba(224,154,24,.3); border-radius:5px; color:#c8a040; cursor:pointer; margin-top:4px; font:400 15px/1 'Cinzel','Palatino Linotype',Georgia,serif; letter-spacing:1px; }
+        .overlay-btn.secondary { background:transparent; border-color:rgba(80,120,50,.3); color:#507040; margin-top:10px; }
+        .overlay-sep { width:40px; height:1px; background:#1a2a18; margin:10px 0; }
+
+        #season-flash { position:fixed; inset:0; z-index:150; pointer-events:none; display:flex; align-items:center; justify-content:center; background:rgba(5,10,5,0); transition:background .6s; }
+        #season-flash-text { font-family:'Cinzel','Palatino Linotype',Georgia,serif; font-size:32px; color:#e09a18; letter-spacing:3px; text-align:center; opacity:0; transition:opacity .4s; }
     </style>
 </head>
 <body>
 
 <div id="hud">
-    <div class="hud-stat">
-        <div class="hud-label">Bees</div>
-        <div class="hud-value" id="hud-bees">15</div>
-    </div>
-    <div class="hud-center">
-        <div class="hud-season" id="hud-season">Spring</div>
-        <div class="hud-day" id="hud-day">Day 1/25 · Year 1</div>
-    </div>
-    <div class="hud-stat">
-        <div class="hud-label">Honey</div>
-        <div class="hud-value" id="hud-honey">0</div>
-    </div>
+    <div class="hud-stat"><div class="hud-label">Bees</div><div class="hud-value" id="hud-bees">15</div></div>
+    <div class="hud-center"><div class="hud-season" id="hud-season">Spring</div><div class="hud-day" id="hud-day">Day 1 · Year 1</div></div>
+    <div class="hud-stat"><div class="hud-label">Honey</div><div class="hud-value" id="hud-honey">0</div></div>
 </div>
 
 <div id="view-tabs">
     <button class="view-tab active" id="tab-map"  onclick="switchView('map')">Foraging</button>
     <button class="view-tab"        id="tab-hive" onclick="switchView('hive')">Hive</button>
 </div>
-
 <div id="hive-subtext"></div>
 <div id="toast-container"></div>
 
+<div id="swarm-bar"><div id="swarm-label">Swarm pressure</div><div id="swarm-track"><div id="swarm-fill" style="width:0%"></div></div></div>
+<div id="goal-bar"></div>
+
 <div id="tile-panel">
-    <div class="panel-row-top">
+    <div class="panel-header">
         <div class="panel-tile-name" id="panel-name">—</div>
         <button class="panel-close" id="panel-close">×</button>
     </div>
     <div id="panel-body"></div>
 </div>
 
-<div id="bottom-hints">
+<div id="bottom-bar">
     <button id="speed-btn" onclick="cycleSpeed()">1×</button>
     <div id="range-hint">—</div>
 </div>
+
+<div class="overlay" id="intro-overlay" style="display:none">
+    <div class="overlay-title">The Apiary</div>
+    <div class="overlay-sub">A colony stirs in the dark.
+Lead your bees through the seasons.
+Survive the first winter.</div>
+    <button class="overlay-btn" onclick="startGame()">Begin</button>
+</div>
+
+<div class="overlay" id="gameover-overlay" style="display:none">
+    <div class="overlay-title">Colony Collapsed</div>
+    <div class="overlay-sep"></div>
+    <div class="overlay-stat" id="gameover-stats"></div>
+    <div class="overlay-sep"></div>
+    <button class="overlay-btn" onclick="newGame(true)">Begin Again</button>
+</div>
+
+<div class="overlay" id="confirm-overlay" style="display:none">
+    <div class="overlay-title">Abandon Colony?</div>
+    <div class="overlay-sub">Your current progress will be lost.</div>
+    <button class="overlay-btn danger-btn" onclick="newGame(true)">Start Over</button>
+    <button class="overlay-btn secondary" onclick="document.getElementById('confirm-overlay').style.display='none'">Keep Playing</button>
+</div>
+
+<div id="season-flash"><div id="season-flash-text"></div></div>
 
 <script src="phaser.min.js"></script>
 <script>
 'use strict';
 
-// ══════════════════════════════════════════════
-// HEX MATH  (pointy-top axial)
-// ══════════════════════════════════════════════
+// ── HEX MATH ──────────────────────────────────────────────
+const HEX = { SIZE:38, SQRT3:Math.sqrt(3) };
+function h2p(q,r){ return { x:HEX.SIZE*(HEX.SQRT3*q+HEX.SQRT3/2*r), y:HEX.SIZE*1.5*r }; }
+function p2h(x,y){ return hround((x*HEX.SQRT3/3-y/3)/HEX.SIZE, y*2/3/HEX.SIZE); }
+function hround(fq,fr){ const fs=-fq-fr; let q=Math.round(fq),r=Math.round(fr),s=Math.round(fs); const dq=Math.abs(q-fq),dr=Math.abs(r-fr),ds=Math.abs(s-fs); if(dq>dr&&dq>ds)q=-r-s; else if(dr>ds)r=-q-s; return {q,r}; }
+function hkey(q,r){ return `${q},${r}`; }
+function neighbors(q,r){ return [[q+1,r],[q+1,r-1],[q,r-1],[q-1,r],[q-1,r+1],[q,r+1]]; }
+function hdist(q1,r1,q2,r2){ return (Math.abs(q1-q2)+Math.abs(q1+r1-q2-r2)+Math.abs(r1-r2))/2; }
+function hexesInRadius(cq,cr,rad){ const res=[]; for(let dq=-rad;dq<=rad;dq++) for(let dr=Math.max(-rad,-dq-rad);dr<=Math.min(rad,-dq+rad);dr++) res.push([cq+dq,cr+dr]); return res; }
+function corners(cx,cy,r){ const pts=[]; for(let i=0;i<6;i++){const a=Math.PI/180*(60*i-30);pts.push(cx+r*Math.cos(a),cy+r*Math.sin(a));} return pts; }
 
-const HEX = { SIZE: 38, SQRT3: Math.sqrt(3) };
-
-function h2p(q, r) {
-    return { x: HEX.SIZE * (HEX.SQRT3 * q + HEX.SQRT3 / 2 * r), y: HEX.SIZE * 1.5 * r };
-}
-function p2h(x, y) {
-    return hround((x * HEX.SQRT3 / 3 - y / 3) / HEX.SIZE, y * 2 / 3 / HEX.SIZE);
-}
-function hround(fq, fr) {
-    const fs = -fq - fr;
-    let q = Math.round(fq), r = Math.round(fr), s = Math.round(fs);
-    const dq = Math.abs(q-fq), dr = Math.abs(r-fr), ds = Math.abs(s-fs);
-    if (dq > dr && dq > ds) q = -r - s;
-    else if (dr > ds)        r = -q - s;
-    return { q, r };
-}
-function hkey(q, r)      { return `${q},${r}`; }
-function neighbors(q, r) { return [[q+1,r],[q+1,r-1],[q,r-1],[q-1,r],[q-1,r+1],[q,r+1]]; }
-function hdist(q1,r1,q2,r2) { return (Math.abs(q1-q2)+Math.abs(q1+r1-q2-r2)+Math.abs(r1-r2))/2; }
-function hexesInRadius(cq, cr, rad) {
-    const res = [];
-    for (let dq = -rad; dq <= rad; dq++)
-        for (let dr = Math.max(-rad,-dq-rad); dr <= Math.min(rad,-dq+rad); dr++)
-            res.push([cq+dq, cr+dr]);
-    return res;
-}
-function corners(cx, cy, r) {
-    const pts = [];
-    for (let i = 0; i < 6; i++) {
-        const a = Math.PI / 180 * (60 * i - 30);
-        pts.push(cx + r * Math.cos(a), cy + r * Math.sin(a));
-    }
-    return pts;
-}
-
-// ══════════════════════════════════════════════
-// TILE DEFINITIONS
-// ══════════════════════════════════════════════
-
+// ── TILE DEFINITIONS ──────────────────────────────────────
 const TILES = {
-    WILDFLOWER: {
-        name: 'Wildflower Meadow', forage: 3,
-        fill: [0x1a1008, 0x2a4014, 0x3d6020, 0x527e28],
-        rim:  [0x2a1a10, 0x3a5820, 0x5a8830, 0x78aa3a],
-    },
-    FOREST: {
-        name: 'Forest', forage: 2,
-        fill: [0x1a1008, 0x1a2e14, 0x1e3e18, 0x20501a],
-        rim:  [0x2a1a10, 0x283e20, 0x2c5824, 0x307030],
-    },
-    CLOVER: {
-        name: 'Clover Field', forage: 4,
-        fill: [0x1a1008, 0x2a4818, 0x406820, 0x5a8c28],
-        rim:  [0x2a1a10, 0x3a6020, 0x5a8830, 0x7ab040],
-    },
-    SUNFLOWER: {
-        name: 'Sunflower Field', forage: 4,
-        fill: [0x1a1008, 0x30300e, 0x484812, 0x686018],
-        rim:  [0x2a1a10, 0x404016, 0x60601a, 0x888024],
-    },
-    DEAD_ZONE: {
-        name: 'Dead Zone', forage: 0,
-        fill: [0x130a04, 0x130a04, 0x1e1208, 0x281a0a],
-        rim:  [0x201008, 0x201008, 0x2c1a0c, 0x382410],
-    },
-    WATER: {
-        name: 'Water Source', forage: 0,
-        fill: [0x0a1828, 0x0a1828, 0x122038, 0x162848],
-        rim:  [0x142030, 0x142030, 0x1c3050, 0x204068],
-    },
-    STRUCTURE: {
-        name: 'Abandoned Structure', forage: 0,
-        fill: [0x1c1c18, 0x1c1c18, 0x242420, 0x2e2e28],
-        rim:  [0x2a2a24, 0x2a2a24, 0x363630, 0x404040],
-    },
-    HIVE_BOX: {
-        name: 'Your Hive', forage: 0,
-        fill: [0x2a1c08, 0x2a1c08, 0x2a1c08, 0x2a1c08],
-        rim:  [0xe09a18, 0xe09a18, 0xe09a18, 0xe09a18],
-    },
+    WILDFLOWER:{ name:'Wildflower Meadow', forage:3,
+        fill:[0x181008,0x22380e,0x345418,0x4a7020], rim:[0x28180a,0x3a5818,0x527a28,0x70a038] },
+    FOREST:    { name:'Forest', forage:2,
+        fill:[0x181008,0x18280e,0x1c3a12,0x1e5016], rim:[0x28180a,0x283e18,0x2c5a1e,0x307828] },
+    CLOVER:    { name:'Clover Field', forage:4,
+        fill:[0x181008,0x263a10,0x3a5e18,0x508020], rim:[0x28180a,0x3a5818,0x5a8828,0x78b038] },
+    SUNFLOWER: { name:'Sunflower Field', forage:4,
+        fill:[0x181008,0x2c2a08,0x484010,0x625a10], rim:[0x28180a,0x3e3e10,0x606018,0x868020] },
+    DEAD_ZONE: { name:'Dead Zone', forage:0,
+        fill:[0x120c08,0x120c08,0x1c1410,0x241810], rim:[0x1e1208,0x1e1208,0x2c1c10,0x342210] },
+    WATER:     { name:'Water Source', forage:0,
+        fill:[0x0a1828,0x0a1828,0x121e36,0x162848], rim:[0x122030,0x122030,0x1c3050,0x204068] },
+    STRUCTURE: { name:'Abandoned Structure', forage:0,
+        fill:[0x1a1a16,0x1a1a16,0x222218,0x2c2c22], rim:[0x2a2a22,0x2a2a22,0x343430,0x404038] },
+    HIVE_BOX:  { name:'Your Hive', forage:0,
+        fill:[0x2a1c08,0x2a1c08,0x2a1c08,0x2a1c08], rim:[0xe09a18,0xe09a18,0xe09a18,0xe09a18] },
 };
+const STAGE_NAMES = ['Dead','Sparse','Recovering','Thriving'];
+const SEASONS     = ['Spring','Summer','Fall','Winter'];
+const SEASON_DAYS = [25,35,25,15];
 
-const STAGE_NAMES = ['Dead', 'Sparse', 'Recovering', 'Thriving'];
-const SEASONS     = ['Spring', 'Summer', 'Fall', 'Winter'];
-const SEASON_DAYS = [25, 35, 25, 15];
-
-// ══════════════════════════════════════════════
-// MAP GENERATION
-// ══════════════════════════════════════════════
-
-function generateMap() {
-    const tiles = {};
-    const allHexes = hexesInRadius(0, 0, 3);
-    const pool = [
-        ...Array(13).fill('WILDFLOWER'), ...Array(7).fill('FOREST'),
-        ...Array(4).fill('CLOVER'),      ...Array(3).fill('SUNFLOWER'),
-        ...Array(5).fill('DEAD_ZONE'),   ...Array(2).fill('WATER'),
-        ...Array(1).fill('STRUCTURE'),
-    ];
-    for (let i = pool.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [pool[i], pool[j]] = [pool[j], pool[i]];
-    }
-    let idx = 0;
-    allHexes.forEach(([q, r]) => {
-        const key = hkey(q, r), dist = hdist(q, r, 0, 0);
-        let type, stage;
-        if (q === 0 && r === 0) {
-            type = 'HIVE_BOX'; stage = 3;
-        } else {
-            type = pool[idx++ % pool.length];
-            if      (type === 'WATER')     stage = 3;
-            else if (type === 'DEAD_ZONE') stage = 0;
-            else if (dist <= 1)            stage = 2;
-            else                           stage = 1;
-        }
-        tiles[key] = { q, r, type, stage, territory: 'home', foragers: 0 };
+// ── MAP GEN ────────────────────────────────────────────────
+function generateMap(){
+    const pool=['WILDFLOWER','WILDFLOWER','WILDFLOWER','WILDFLOWER','WILDFLOWER','WILDFLOWER','WILDFLOWER',
+                'FOREST','FOREST','FOREST','FOREST','CLOVER','CLOVER','CLOVER','SUNFLOWER','SUNFLOWER',
+                'DEAD_ZONE','DEAD_ZONE','DEAD_ZONE','WATER','WATER','STRUCTURE'];
+    for(let i=pool.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[pool[i],pool[j]]=[pool[j],pool[i]];}
+    const tiles={}; let idx=0;
+    hexesInRadius(0,0,3).forEach(([q,r])=>{
+        const key=hkey(q,r),dist=hdist(q,r,0,0);
+        let type,stage;
+        if(q===0&&r===0){type='HIVE_BOX';stage=3;}
+        else{type=pool[idx++%pool.length];stage=type==='WATER'?3:type==='DEAD_ZONE'?0:dist<=1?2:1;}
+        tiles[key]={q,r,type,stage,territory:'home',foragers:0};
     });
     return tiles;
 }
-
-function generateFog(tiles) {
-    const fog = {}, known = new Set(Object.keys(tiles));
-    known.forEach(k => {
-        const { q, r } = tiles[k];
-        neighbors(q, r).forEach(([nq, nr]) => {
-            const nk = hkey(nq, nr);
-            if (!known.has(nk) && !fog[nk]) fog[nk] = { q: nq, r: nr, fogLevel: 1 };
-        });
+function generateFog(tiles){
+    const fog={},known=new Set(Object.keys(tiles));
+    known.forEach(k=>{
+        const{q,r}=tiles[k];
+        neighbors(q,r).forEach(([nq,nr])=>{const nk=hkey(nq,nr);if(!known.has(nk)&&!fog[nk])fog[nk]={q:nq,r:nr,fogLevel:1};});
     });
-    const ring1 = new Set(Object.keys(fog));
-    ring1.forEach(k => {
-        const { q, r } = fog[k];
-        neighbors(q, r).forEach(([nq, nr]) => {
-            const nk = hkey(nq, nr);
-            if (!known.has(nk) && !ring1.has(nk) && !fog[nk])
-                fog[nk] = { q: nq, r: nr, fogLevel: 2 };
-        });
+    const ring1=new Set(Object.keys(fog));
+    ring1.forEach(k=>{
+        const{q,r}=fog[k];
+        neighbors(q,r).forEach(([nq,nr])=>{const nk=hkey(nq,nr);if(!known.has(nk)&&!ring1.has(nk)&&!fog[nk])fog[nk]={q:nq,r:nr,fogLevel:2};});
     });
     return fog;
 }
 
-// ══════════════════════════════════════════════
-// GAME STATE
-// ══════════════════════════════════════════════
+// ── GAME STATE ──────────────────────────────────────────────
+const GS_DEFAULTS = ()=>({
+    bees:15,honey:0,nurses:2,guards:0,
+    season:'Spring',day:1,year:1,
+    forageRadius:1,forageTiles:{},assignedBees:0,
+    broodProgress:0,scoutMissions:[],tiles:{},fog:{},
+    view:'map',selectedKey:null,panelOpen:false,_fogPanelTile:null,
+    speed:1,dayMs:3000,_elapsed:0,_honeyFrac:0,
+    swarmPressure:0,_collapseCountdown:0,
+    _warnedLowHoney:false,_warnedWinter:false,_nextThreat:40,
+    _totalHoney:0,_peakBees:15,_milestones:{},_prevSeason:'Spring',
+});
+const GS = GS_DEFAULTS();
 
-const GS = {
-    bees: 15, honey: 0,
-    nurses: 2, guards: 0,
-    season: 'Spring', day: 1, year: 1,
-    forageRadius: 1,
-    forageTiles: {}, assignedBees: 0,
-    broodProgress: 0,
-    scoutMissions: [],
-    tiles: {}, fog: {},
-    view: 'map',
-    selectedKey: null, panelOpen: false, _fogPanelTile: null,
-    speed: 1, dayMs: 3000, _elapsed: 0, _honeyFrac: 0,
-    _warnedLowHoney: false, _warnedWinter: false,
-    _nextThreat: 40,
-};
+// ── SAVE / LOAD ────────────────────────────────────────────
+const SAVE_KEY = 'apiary_v2';
+const SAVE_FIELDS = ['bees','honey','nurses','guards','season','day','year',
+    'forageRadius','forageTiles','assignedBees','broodProgress','scoutMissions',
+    'tiles','fog','speed','swarmPressure','_collapseCountdown',
+    '_warnedLowHoney','_warnedWinter','_nextThreat','_honeyFrac',
+    '_totalHoney','_peakBees','_milestones','_prevSeason'];
 
-// ══════════════════════════════════════════════
-// NOTIFICATIONS
-// ══════════════════════════════════════════════
-
-function showToast(msg, type = '') {
-    const el = document.createElement('div');
-    el.className = 'toast' + (type ? ' ' + type : '');
-    el.textContent = msg;
-    document.getElementById('toast-container').appendChild(el);
-    setTimeout(() => el.remove(), 3000);
+function saveGame(){
+    const obj={}; SAVE_FIELDS.forEach(k=>{obj[k]=GS[k];});
+    try{localStorage.setItem(SAVE_KEY,JSON.stringify(obj));}catch(e){}
+}
+function loadGame(){
+    try{
+        const raw=localStorage.getItem(SAVE_KEY); if(!raw) return false;
+        const obj=JSON.parse(raw);
+        SAVE_FIELDS.forEach(k=>{if(obj[k]!==undefined) GS[k]=obj[k];});
+        return true;
+    }catch(e){try{localStorage.removeItem(SAVE_KEY);}catch(e2){} return false;}
+}
+function startGame(){
+    document.getElementById('intro-overlay').style.display='none';
+    saveGame();
+    setTimeout(()=>showToast('Tap your hive to assign nurses and guards'),800);
+}
+function newGame(confirmed){
+    if(!confirmed){document.getElementById('confirm-overlay').style.display='flex';return;}
+    document.getElementById('confirm-overlay').style.display='none';
+    document.getElementById('gameover-overlay').style.display='none';
+    try{localStorage.removeItem(SAVE_KEY);}catch(e){}
+    const d=GS_DEFAULTS(); Object.assign(GS,d);
+    GS.tiles=generateMap(); GS.fog=generateFog(GS.tiles);
+    if(window._scene){window._scene.refreshTiles();window._scene.restartPulse();}
+    updateHUD(); closePanel();
+    document.getElementById('speed-btn').textContent='1×';
+    setTimeout(()=>showToast('A new colony awakens.'),500);
+    saveGame();
 }
 
-// ══════════════════════════════════════════════
-// HUD
-// ══════════════════════════════════════════════
-
-function seasonFromDay(day) {
-    const doy = (day - 1) % 100; let acc = 0;
-    for (let i = 0; i < SEASONS.length; i++) { acc += SEASON_DAYS[i]; if (doy < acc) return SEASONS[i]; }
-    return SEASONS[3];
+// ── TOASTS ─────────────────────────────────────────────────
+function showToast(msg,type=''){
+    const el=document.createElement('div'); el.className='toast'+(type?' '+type:''); el.textContent=msg;
+    document.getElementById('toast-container').appendChild(el); setTimeout(()=>el.remove(),3000);
 }
 
-function seasonProgress() {
-    const doy = (GS.day - 1) % 100; let acc = 0;
-    for (let i = 0; i < SEASONS.length; i++) {
-        if (doy < acc + SEASON_DAYS[i]) return `Day ${doy - acc + 1}/${SEASON_DAYS[i]}`;
-        acc += SEASON_DAYS[i];
-    }
+// ── SEASON FLASH ───────────────────────────────────────────
+const SEASON_COLORS={'Spring':'#50c870','Summer':'#e0bc40','Fall':'#c86020','Winter':'#80a8d0'};
+function flashSeason(name){
+    const fl=document.getElementById('season-flash'),tx=document.getElementById('season-flash-text');
+    tx.textContent=name.toUpperCase(); tx.style.color=SEASON_COLORS[name]||'#e09a18';
+    fl.style.background='rgba(5,10,5,.55)'; tx.style.opacity='1';
+    setTimeout(()=>{fl.style.background='rgba(5,10,5,0)';tx.style.opacity='0';},1400);
+}
+
+// ── HUD ────────────────────────────────────────────────────
+function seasonProgress(){
+    const doy=(GS.day-1)%100; let acc=0;
+    for(let i=0;i<SEASONS.length;i++){if(doy<acc+SEASON_DAYS[i])return`Day ${doy-acc+1}/${SEASON_DAYS[i]}`;acc+=SEASON_DAYS[i];}
     return '';
 }
-
-function updateHUD() {
-    const free = Math.max(0, GS.bees - GS.assignedBees - GS.nurses - GS.guards);
-    document.getElementById('hud-bees').textContent   = GS.bees;
-    document.getElementById('hud-honey').textContent  = GS.honey;
-    document.getElementById('hud-season').textContent = GS.season;
-    document.getElementById('hud-day').textContent    = `${seasonProgress()} · Year ${GS.year}`;
-    document.getElementById('range-hint').textContent = `${free} free · ${GS.assignedBees} foraging`;
-
-    // Hive subtext when on hive view
-    const nursesNeeded = Math.max(1, Math.ceil(GS.bees / 20));
-    document.getElementById('hive-subtext').textContent =
-        `nurses ${GS.nurses}/${nursesNeeded} · brood day ${GS.broodProgress + 1}/21 · guards ${GS.guards}`;
+function seasonFromDay(day){const doy=(day-1)%100;let acc=0;for(let i=0;i<SEASONS.length;i++){acc+=SEASON_DAYS[i];if(doy<acc)return SEASONS[i];}return SEASONS[3];}
+function updateHUD(){
+    const free=Math.max(0,GS.bees-GS.assignedBees-GS.nurses-GS.guards);
+    document.getElementById('hud-bees').textContent=GS.bees;
+    document.getElementById('hud-honey').textContent=GS.honey;
+    document.getElementById('hud-season').textContent=GS.season;
+    document.getElementById('hud-day').textContent=`${seasonProgress()} · Year ${GS.year}`;
+    document.getElementById('range-hint').textContent=`${free} free · ${GS.assignedBees} foraging`;
+    const nursesNeeded=Math.max(1,Math.ceil(GS.bees/20));
+    if(GS.view==='hive')
+        document.getElementById('hive-subtext').textContent=`nurses ${GS.nurses}/${nursesNeeded} · brood day ${GS.broodProgress+1}/21 · guards ${GS.guards}`;
+    const sb=document.getElementById('swarm-bar');
+    if(GS.swarmPressure>30){sb.style.display='flex';document.getElementById('swarm-fill').style.width=GS.swarmPressure+'%';}
+    else sb.style.display='none';
+    // Goal bar
+    const gb=document.getElementById('goal-bar');
+    const doy=(GS.day-1)%100;
+    const daysLeft=100-doy;
+    if(GS.season==='Winter'){gb.textContent='';return;}
+    const need=Math.ceil(GS.bees*0.08*15);
+    const deficit=need-GS.honey;
+    if(deficit<=0){gb.className='';gb.textContent=`winter ready · ${GS.honey} lbs stored`;}
+    else if(daysLeft<=20){gb.className='near';gb.textContent=`${deficit} lbs short for winter · ${daysLeft}d left`;}
+    else{gb.className='';gb.textContent=`need ~${need} lbs honey for winter`;}
 }
 
-// ══════════════════════════════════════════════
-// GAME LOOP
-// ══════════════════════════════════════════════
+// ── MILESTONES ─────────────────────────────────────────────
+const MILESTONES=[
+    {id:'bees30', check:()=>GS.bees>=30,  msg:'Colony grows — 30 bees'},
+    {id:'bees50', check:()=>GS.bees>=50,  msg:'A thriving colony — 50 bees'},
+    {id:'bees100',check:()=>GS.bees>=100, msg:'A hundred strong'},
+    {id:'honey30',check:()=>GS.honey>=30, msg:'30 lbs of honey stored'},
+    {id:'honey60',check:()=>GS.honey>=60, msg:'The stores grow full'},
+    {id:'winter1',check:()=>GS.year===2&&GS.season==='Spring'&&(GS.day-1)%100<3, msg:'First winter survived'},
+    {id:'winter2',check:()=>GS.year===3&&GS.season==='Spring'&&(GS.day-1)%100<3, msg:'A second winter endured'},
+    {id:'scout3', check:()=>Object.values(GS.tiles).filter(t=>t.territory==='scouted').length>=3, msg:'Three territories scouted'},
+];
+function checkMilestones(){
+    MILESTONES.forEach(m=>{if(!GS._milestones[m.id]&&m.check()){GS._milestones[m.id]=true;showToast(m.msg,'mile');}});
+}
 
-function advanceDay() {
-    GS.day++;
-    GS.season = seasonFromDay(GS.day);
-    const doy = (GS.day - 1) % 100;
-    if (doy === 0 && GS.day > 1) {
-        GS.year++;
-        GS._warnedWinter = false;
-        GS._warnedLowHoney = false;
-    }
+// ── GAME LOOP ──────────────────────────────────────────────
+function advanceDay(){
+    const prevSeason=GS.season;
+    GS.day++; GS.season=seasonFromDay(GS.day);
+    const doy=(GS.day-1)%100;
+    if(doy===0&&GS.day>1){GS.year++;GS._warnedWinter=false;GS._warnedLowHoney=false;}
+    if(GS.season!==prevSeason) flashSeason(GS.season);
 
-    // Honey from foragers — 0.02 per forager per forage-rating per day
-    let gained = 0;
-    Object.entries(GS.forageTiles).forEach(([key, count]) => {
-        const tile = GS.tiles[key];
-        if (!tile || tile.stage === 0) return;
-        const def = TILES[tile.type];
-        if (def && def.forage > 0) {
-            const eff = GS.season === 'Winter' ? 0 : GS.season === 'Fall' ? 0.6 : 1.0;
-            gained += def.forage * count * 0.02 * eff;
-        }
+    // Honey from foragers
+    let gained=0;
+    Object.entries(GS.forageTiles).forEach(([key,count])=>{
+        const tile=GS.tiles[key]; if(!tile||tile.stage===0)return;
+        const def=TILES[tile.type]; if(!def||!def.forage)return;
+        const eff=GS.season==='Winter'?0:GS.season==='Fall'?.6:GS.season==='Summer'?1.1:1.0;
+        const amt=def.forage*count*0.02*eff; gained+=amt; GS._totalHoney+=amt;
     });
 
-    // Winter honey consumption
-    const consumed = GS.season === 'Winter' ? GS.bees * 0.08 : 0;
-    GS._honeyFrac += gained - consumed;
-    if (GS._honeyFrac >= 1) {
-        const n = Math.floor(GS._honeyFrac);
-        GS.honey += n; GS._honeyFrac -= n;
-    } else if (GS._honeyFrac < 0) {
-        if (GS.honey > 0) {
-            const n = Math.min(GS.honey, Math.ceil(-GS._honeyFrac));
-            GS.honey -= n; GS._honeyFrac += n;
-        } else { GS._honeyFrac = 0; }
+    // Winter consumption
+    const consumed=GS.season==='Winter'?GS.bees*0.08:0;
+    GS._honeyFrac+=gained-consumed;
+    if(GS._honeyFrac>=1){const n=Math.floor(GS._honeyFrac);GS.honey+=n;GS._honeyFrac-=n;}
+    else if(GS._honeyFrac<0){if(GS.honey>0){const n=Math.min(GS.honey,Math.ceil(-GS._honeyFrac));GS.honey-=n;GS._honeyFrac+=n;}else GS._honeyFrac=0;}
+
+    if(GS.season==='Winter'&&GS.honey===0){
+        const lost=Math.max(1,Math.floor(GS.bees*0.04)); GS.bees=Math.max(2,GS.bees-lost); _clampRoles();
+        if(GS.day%3===0) showToast(`${lost} bees lost to cold`,'danger');
     }
 
-    // Winter starvation
-    if (GS.season === 'Winter' && GS.honey === 0) {
-        const lost = Math.max(1, Math.floor(GS.bees * 0.04));
-        GS.bees = Math.max(3, GS.bees - lost);
-        _clampRoles();
-        if (GS.day % 3 === 0) showToast(`${lost} bees lost to cold`, 'danger');
-    }
-
-    // Brood cycle — requires nurses
-    const nursesNeeded = Math.max(1, Math.ceil(GS.bees / 20));
+    // Brood cycle
+    const nursesNeeded=Math.max(1,Math.ceil(GS.bees/20));
     GS.broodProgress++;
-    if (GS.broodProgress >= 21) {
-        GS.broodProgress = 0;
-        if (GS.season !== 'Winter') {
-            if (GS.nurses >= nursesNeeded)
-                GS.bees += Math.max(1, Math.floor(GS.bees * 0.04));
-            else
-                showToast(`Brood failing — need ${nursesNeeded} nurses (have ${GS.nurses})`, 'warn');
+    if(GS.broodProgress>=21){
+        GS.broodProgress=0;
+        if(GS.season!=='Winter'){
+            if(GS.nurses>=nursesNeeded){GS.bees+=Math.max(1,Math.floor(GS.bees*0.04));if(GS.bees>GS._peakBees)GS._peakBees=GS.bees;}
+            else showToast(`Brood neglected — need ${nursesNeeded} nurses (${GS.nurses} active)`,'warn');
         }
     }
+    if(GS.bees>=100)GS.forageRadius=2; if(GS.bees>=400)GS.forageRadius=3;
 
-    if (GS.bees >= 100) GS.forageRadius = 2;
-    if (GS.bees >= 400) GS.forageRadius = 3;
-
-    // Tile healing
-    if (GS.day % 5 === 0 && GS.season !== 'Winter') {
-        const keys = Object.keys(GS.tiles);
-        const t = GS.tiles[keys[Math.floor(Math.random() * keys.length)]];
-        if (t && t.type !== 'DEAD_ZONE' && t.type !== 'WATER' && t.stage < 3
-                && hdist(t.q, t.r, 0, 0) <= GS.forageRadius)
-            t.stage = Math.min(3, t.stage + 1);
+    // Tile healing (only unharvested tiles)
+    if(GS.day%5===0&&GS.season!=='Winter'){
+        const keys=Object.keys(GS.tiles);
+        const t=GS.tiles[keys[Math.floor(Math.random()*keys.length)]];
+        if(t&&t.type!=='DEAD_ZONE'&&t.type!=='WATER'&&t.stage<3&&!GS.forageTiles[hkey(t.q,t.r)]&&hdist(t.q,t.r,0,0)<=GS.forageRadius)
+            t.stage=Math.min(3,t.stage+1);
     }
 
     // Scout missions
-    GS.scoutMissions = GS.scoutMissions.filter(m => {
-        m.daysLeft--;
-        if (m.daysLeft <= 0) { revealScoutedTile(m.key, m.q, m.r); return false; }
-        return true;
-    });
+    GS.scoutMissions=GS.scoutMissions.filter(m=>{m.daysLeft--;if(m.daysLeft<=0){revealScoutedTile(m.key,m.q,m.r);return false;}return true;});
 
-    // Threat events
-    if (GS.day >= GS._nextThreat && GS.season !== 'Winter') {
-        GS._nextThreat = GS.day + 25 + Math.floor(Math.random() * 20);
-        if (Math.random() < 0.55) triggerThreat();
+    // Swarm pressure
+    if(GS.bees>150&&(GS.season==='Spring'||GS.season==='Summer')){
+        GS.swarmPressure=Math.min(100,GS.swarmPressure+2);
+        if(GS.swarmPressure===80) showToast('Colony restless — swarm pressure rising','warn');
+        if(GS.swarmPressure>=100) triggerSwarm();
+    } else { GS.swarmPressure=Math.max(0,GS.swarmPressure-1); }
+
+    // Threats
+    if(GS.day>=GS._nextThreat&&GS.season!=='Winter'){
+        GS._nextThreat=GS.day+25+Math.floor(Math.random()*20);
+        if(Math.random()<0.6) triggerThreat();
     }
 
     // Warnings
-    if (!GS._warnedWinter && doy === 78) {
-        GS._warnedWinter = true;
-        const need = Math.ceil(GS.bees * 0.08 * 15);
-        showToast(`Winter in 7 days — need ~${need} lbs (have ${GS.honey})`, GS.honey < need ? 'warn' : '');
+    if(!GS._warnedWinter&&doy===78){
+        GS._warnedWinter=true;
+        const need=Math.ceil(GS.bees*0.08*15);
+        showToast(`Winter in 7 days — need ~${need} lbs (have ${GS.honey})`,GS.honey<need?'warn':'');
     }
-    if (!GS._warnedLowHoney && GS.honey < 8 && GS.honey > 0 && GS.season !== 'Winter') {
-        GS._warnedLowHoney = true;
-        showToast('Honey critically low', 'warn');
-    }
-    if (GS.honey >= 15) GS._warnedLowHoney = false;
+    if(!GS._warnedLowHoney&&GS.honey<8&&GS.honey>0&&GS.season!=='Winter'){GS._warnedLowHoney=true;showToast('Honey stores critically low','warn');}
+    if(GS.honey>=15) GS._warnedLowHoney=false;
 
+    // Colony collapse
+    if(GS.bees<=2){GS._collapseCountdown++;if(GS._collapseCountdown>=3)showGameOver();}
+    else GS._collapseCountdown=0;
+
+    checkMilestones();
     updateHUD();
-    if (window._scene) window._scene.refreshTiles();
+    if(window._scene) window._scene.refreshTiles();
+    saveGame();
 }
 
-function _clampRoles() {
-    GS.nurses = Math.min(GS.nurses, Math.floor(GS.bees * 0.5));
-    GS.guards  = Math.min(GS.guards,  Math.floor(GS.bees * 0.3));
-    GS.assignedBees = Math.min(GS.assignedBees, GS.bees - GS.nurses - GS.guards);
+function _clampRoles(){
+    GS.nurses=Math.min(GS.nurses,Math.floor(GS.bees*.5));
+    GS.guards=Math.min(GS.guards,Math.floor(GS.bees*.3));
+    GS.assignedBees=Math.min(GS.assignedBees,GS.bees-GS.nurses-GS.guards);
+}
+function showGameOver(){
+    document.getElementById('gameover-stats').textContent=`Year ${GS.year} · Peak ${GS._peakBees} bees · ${Math.floor(GS._totalHoney)} lbs earned`;
+    document.getElementById('gameover-overlay').style.display='flex';
+    try{localStorage.removeItem(SAVE_KEY);}catch(e){}
 }
 
-// ══════════════════════════════════════════════
-// THREATS
-// ══════════════════════════════════════════════
-
-function triggerThreat() {
-    const roll = Math.random();
-    if (roll < 0.4) {
-        if (GS.guards >= 3) {
-            showToast('Wasp scouts turned back — guards held');
-        } else {
-            const stolen = Math.min(GS.honey, 3 + Math.floor(Math.random() * 6));
-            GS.honey -= stolen;
-            showToast(`Wasp raid — ${stolen} lbs honey stolen`, 'danger');
-        }
-    } else if (roll < 0.65) {
-        const lost = Math.max(1, Math.floor(GS.bees * 0.08));
-        GS.bees = Math.max(3, GS.bees - lost);
-        _clampRoles();
-        showToast(`Mite infestation — ${lost} bees lost`, 'danger');
-    } else if (roll < 0.85) {
-        showToast('A wild swarm spotted nearby — scout the fog to find it');
-    } else {
-        const bonus = 2 + Math.floor(Math.random() * 4);
-        GS.honey += bonus;
-        showToast(`Late bloom — foragers found ${bonus} extra lbs`);
-    }
-    updateHUD();
+// ── SWARM ──────────────────────────────────────────────────
+function triggerSwarm(){const lost=Math.floor(GS.bees*.28);GS.bees-=lost;GS.swarmPressure=0;_clampRoles();showToast(`Swarm departed — ${lost} bees gone`,'danger');}
+function prepareSwarmCell(){
+    if(GS.honey<5){showToast('Need 5 lbs honey to draw swarm cells','warn');return;}
+    GS.honey-=5;GS.swarmPressure=Math.max(0,GS.swarmPressure-45);
+    showToast('Swarm cells prepared — colony settled');closePanel();updateHUD();saveGame();
 }
 
-// ══════════════════════════════════════════════
-// SCOUTS
-// ══════════════════════════════════════════════
+// ── THREATS ────────────────────────────────────────────────
+const THREAT_EVENTS=[
+    {w:4,fn:()=>{ if(GS.guards>=3)showToast('Wasp scouts repelled by guards'); else{const s=Math.min(GS.honey,3+Math.floor(Math.random()*6));GS.honey-=s;showToast(`Wasp raid — ${s} lbs stolen`,'danger');} }},
+    {w:2.5,fn:()=>{const l=Math.max(1,Math.floor(GS.bees*.08));GS.bees=Math.max(3,GS.bees-l);_clampRoles();showToast(`Varroa mites spreading — ${l} bees lost`,'danger');}},
+    {w:2,fn:()=>{const b=2+Math.floor(Math.random()*4);GS.honey+=b;showToast(`Late bloom — foragers found ${b} extra lbs`);}},
+    {w:1.5,fn:()=>showToast('A wild swarm passes nearby — scout the fog to track where they settle')},
+    {w:1,fn:()=>{const l=Math.max(1,Math.floor(GS.bees*.05));GS.bees=Math.max(3,GS.bees-l);_clampRoles();showToast(`Bear rummaged the hive${GS.guards>=5?' — guards fought back':''} — ${l} bees lost`,'danger');}},
+    {w:1,fn:()=>{if(GS.honey>0){const s=Math.min(GS.honey,Math.floor(GS.honey*.12)+1);GS.honey-=s;showToast(`Robbing bees stripped ${s} lbs${GS.guards>=4?' — guards limited the damage':''}`,'danger');}}},
+];
+function triggerThreat(){const tot=THREAT_EVENTS.reduce((a,e)=>a+e.w,0);let r=Math.random()*tot;for(const e of THREAT_EVENTS){r-=e.w;if(r<=0){e.fn();break;}}updateHUD();saveGame();}
 
-function sendScout(key, q, r) {
-    if (GS.scoutMissions.find(m => m.key === key)) { showToast('Already scouting this area'); return; }
-    if (GS.scoutMissions.length >= 3) { showToast('Already running 3 scout missions', 'warn'); return; }
-    GS.scoutMissions.push({ key, q, r, daysLeft: 3 });
-    showToast('Scouts dispatched — returns in 3 days');
-    closePanel();
-    if (window._scene) window._scene.refreshTiles();
+// ── SCOUTS ─────────────────────────────────────────────────
+function sendScout(key,q,r){
+    if(GS.scoutMissions.find(m=>m.key===key)){showToast('Already scouting this area');return;}
+    if(GS.scoutMissions.length>=3){showToast('3 scout missions already active','warn');return;}
+    GS.scoutMissions.push({key,q,r,daysLeft:3});showToast('Scouts dispatched — returns in 3 days');
+    closePanel();if(window._scene)window._scene.refreshTiles();saveGame();
 }
-
-function revealScoutedTile(key, q, r) {
+function revealScoutedTile(key,q,r){
     delete GS.fog[key];
-    const pool = ['WILDFLOWER','WILDFLOWER','WILDFLOWER','FOREST','FOREST','CLOVER','SUNFLOWER','DEAD_ZONE'];
-    const type  = pool[Math.floor(Math.random() * pool.length)];
-    GS.tiles[key] = { q, r, type, stage: type === 'DEAD_ZONE' ? 0 : 1, territory: 'scouted', foragers: 0 };
-    showToast(`Scouts found: ${TILES[type].name}`, type === 'DEAD_ZONE' ? 'warn' : '');
-    const known = new Set(Object.keys(GS.tiles));
-    neighbors(q, r).forEach(([nq, nr]) => {
-        const nk = hkey(nq, nr);
-        if (!known.has(nk) && !GS.fog[nk]) GS.fog[nk] = { q: nq, r: nr, fogLevel: 1 };
-    });
+    const pool=['WILDFLOWER','WILDFLOWER','WILDFLOWER','FOREST','FOREST','CLOVER','SUNFLOWER','DEAD_ZONE'];
+    const type=pool[Math.floor(Math.random()*pool.length)];
+    GS.tiles[key]={q,r,type,stage:type==='DEAD_ZONE'?0:1,territory:'scouted',foragers:0};
+    showToast(`Scouts returned: ${TILES[type].name}`,type==='DEAD_ZONE'?'warn':'');
+    const known=new Set(Object.keys(GS.tiles));
+    neighbors(q,r).forEach(([nq,nr])=>{const nk=hkey(nq,nr);if(!known.has(nk)&&!GS.fog[nk])GS.fog[nk]={q:nq,r:nr,fogLevel:1};});
 }
 
-// ══════════════════════════════════════════════
-// ROLE ASSIGNMENT
-// ══════════════════════════════════════════════
-
-function changeRole(role, delta) {
-    const free = GS.bees - GS.assignedBees - GS.nurses - GS.guards;
-    if (delta > 0 && free <= 0) return;
-    if (role === 'nurses') {
-        if (delta < 0 && GS.nurses <= 0) return;
-        GS.nurses = Math.max(0, GS.nurses + delta);
-    } else {
-        if (delta < 0 && GS.guards <= 0) return;
-        GS.guards = Math.max(0, GS.guards + delta);
-    }
-    updateHUD();
-    populatePanel(GS.selectedKey);
+// ── ROLES ──────────────────────────────────────────────────
+function changeRole(role,delta){
+    const free=GS.bees-GS.assignedBees-GS.nurses-GS.guards;
+    if(delta>0&&free<=0)return;
+    if(role==='nurses'){if(delta<0&&GS.nurses<=0)return;GS.nurses=Math.max(0,GS.nurses+delta);}
+    else{if(delta<0&&GS.guards<=0)return;GS.guards=Math.max(0,GS.guards+delta);}
+    updateHUD();populatePanel(GS.selectedKey);saveGame();
 }
 
-// ══════════════════════════════════════════════
-// SPEED & VIEW
-// ══════════════════════════════════════════════
-
-function cycleSpeed() {
-    const steps  = [0.5, 1, 2, 4];
-    const labels = ['½×', '1×', '2×', '4×'];
-    const next = (steps.indexOf(GS.speed) + 1) % steps.length;
-    GS.speed = steps[next];
-    document.getElementById('speed-btn').textContent = labels[next];
-}
-
-function switchView(v) {
-    GS.view = v;
-    document.getElementById('tab-map').classList.toggle('active', v === 'map');
-    document.getElementById('tab-hive').classList.toggle('active', v === 'hive');
-    document.getElementById('hive-subtext').style.display = v === 'hive' ? 'block' : 'none';
-    closePanel();
-    if (!window._scene) return;
-    const s = window._scene;
-    s.bgGfx.setVisible(v === 'map');
-    s.hlGfx.setVisible(v === 'map');
-    s.fxGfx.setVisible(v === 'map');
-    s.hiveGfx.setVisible(v === 'hive');
-    if (s.foragerTexts)
-        Object.values(s.foragerTexts).forEach(t => t.setVisible(v === 'map'));
-    if (v === 'hive') {
-        s.cameras.main.setScroll(-s.cameras.main.width / 2, -s.cameras.main.height / 2);
-        s.drawHiveInterior();
-    }
+// ── SPEED & VIEW ───────────────────────────────────────────
+function cycleSpeed(){const steps=[.5,1,2,4],labels=['½×','1×','2×','4×'];const next=(steps.indexOf(GS.speed)+1)%steps.length;GS.speed=steps[next];document.getElementById('speed-btn').textContent=labels[next];}
+function switchView(v){
+    GS.view=v;
+    document.getElementById('tab-map').classList.toggle('active',v==='map');
+    document.getElementById('tab-hive').classList.toggle('active',v==='hive');
+    document.getElementById('hive-subtext').style.display=v==='hive'?'block':'none';
+    closePanel();if(!window._scene)return;const s=window._scene;
+    s.bgGfx.setVisible(v==='map');s.hlGfx.setVisible(v==='map');s.fxGfx.setVisible(v==='map');s.hiveGfx.setVisible(v==='hive');
+    if(s.foragerTexts)Object.values(s.foragerTexts).forEach(t=>t.setVisible(v==='map'));
+    if(v==='hive'){s.cameras.main.setScroll(-s.cameras.main.width/2,-s.cameras.main.height/2);s.drawHiveInterior();}
     updateHUD();
 }
 
-// ══════════════════════════════════════════════
-// PANEL SYSTEM
-// ══════════════════════════════════════════════
-
-function populatePanel(key) {
-    const tile = GS.tiles[key] || GS._fogPanelTile;
-    if (!tile) return;
-    const body = document.getElementById('panel-body');
-    body.innerHTML = '';
-
-    // ── Fog tile ──
-    if (tile._isFog) {
-        document.getElementById('panel-name').textContent = 'Unknown Territory';
-        const scouting = GS.scoutMissions.find(m => m.key === key);
-        body.innerHTML = scouting
-            ? `<div class="panel-stage stage-0">Scouting…</div>
-               <div class="panel-detail">Scouts return in ${scouting.daysLeft} day${scouting.daysLeft !== 1 ? 's' : ''}.</div>`
-            : `<div class="panel-stage stage-0">Unexplored</div>
-               <div class="panel-detail">Unknown land beyond your territory.
-Scouts will map what lives here.</div>
-               <div class="panel-actions"><button class="action-btn secondary" onclick="sendScout('${key}',${tile.q},${tile.r})">Send scouts</button></div>`;
+// ── PANEL ──────────────────────────────────────────────────
+function populatePanel(key){
+    const tile=GS.tiles[key]||GS._fogPanelTile;if(!tile)return;
+    const body=document.getElementById('panel-body');body.innerHTML='';
+    if(tile._isFog){
+        document.getElementById('panel-name').textContent='Unknown Territory';
+        const scouting=GS.scoutMissions.find(m=>m.key===key);
+        body.innerHTML=scouting
+            ?`<div class="panel-stage stage-0">Scouting…</div><div class="panel-body">Scouts return in ${scouting.daysLeft} day${scouting.daysLeft!==1?'s':''}.</div>`
+            :`<div class="panel-stage stage-0">Unexplored</div><div class="panel-body">Unknown land beyond your range.\nScouts will map it.</div>
+              <div class="panel-actions"><button class="action-btn secondary" onclick="sendScout('${key}',${tile.q},${tile.r})">Send scouts</button></div>`;
         return;
     }
-
-    const def = TILES[tile.type];
-    document.getElementById('panel-name').textContent = def.name;
-
-    // ── Hive panel ──
-    if (tile.type === 'HIVE_BOX') {
-        const nursesNeeded = Math.max(1, Math.ceil(GS.bees / 20));
-        const free         = Math.max(0, GS.bees - GS.assignedBees - GS.nurses - GS.guards);
-        const winterNeed   = Math.ceil(GS.bees * 0.08 * 15);
-        const scoutLine    = GS.scoutMissions.length > 0
-            ? `\n${GS.scoutMissions.length} scout mission${GS.scoutMissions.length > 1 ? 's' : ''} active` : '';
-        const nursesOk = GS.nurses >= nursesNeeded;
-
-        body.innerHTML = `
-            <div class="panel-detail">${GS.bees} bees · ${GS.honey} lbs honey
-Est. winter need: ~${winterNeed} lbs${scoutLine}</div>
-            <div class="role-section">
-                <div class="role-row">
-                    <span class="role-label">Nurses</span>
-                    <span class="role-note">need ${nursesNeeded}</span>
-                    <button class="role-btn" onclick="changeRole('nurses',-1)">−</button>
-                    <span class="role-count ${nursesOk ? '' : 'warn'}">${GS.nurses}</span>
-                    <button class="role-btn" onclick="changeRole('nurses',+1)">+</button>
-                </div>
-                <div class="role-row">
-                    <span class="role-label">Guards</span>
-                    <span class="role-note">wasps need 3+</span>
-                    <button class="role-btn" onclick="changeRole('guards',-1)">−</button>
-                    <span class="role-count ${GS.guards >= 3 ? '' : 'warn'}">${GS.guards}</span>
-                    <button class="role-btn" onclick="changeRole('guards',+1)">+</button>
-                </div>
-                <div class="role-row">
-                    <span class="role-label">Foraging</span><span class="role-note"></span>
-                    <span style="width:32px"></span>
-                    <span class="role-count">${GS.assignedBees}</span>
-                    <span style="width:32px"></span>
-                </div>
-                <div class="role-row">
-                    <span class="role-label">Free</span><span class="role-note"></span>
-                    <span style="width:32px"></span>
-                    <span class="role-count ${free < 3 ? 'warn' : ''}">${free}</span>
-                    <span style="width:32px"></span>
-                </div>
-            </div>`;
+    const def=TILES[tile.type];
+    document.getElementById('panel-name').textContent=def.name;
+    if(tile.type==='HIVE_BOX'){
+        const nn=Math.max(1,Math.ceil(GS.bees/20));
+        const free=Math.max(0,GS.bees-GS.assignedBees-GS.nurses-GS.guards);
+        const wn=Math.ceil(GS.bees*0.08*15);
+        const sc=GS.scoutMissions.length>0?`\n${GS.scoutMissions.length} scout mission${GS.scoutMissions.length>1?'s':''} active`:'';
+        const sw=GS.swarmPressure>40?`\nSwarm pressure: ${GS.swarmPressure}%`:'';
+        body.innerHTML=`
+<div class="panel-body">${GS.bees} bees · ${GS.honey} lbs honey
+Est. winter need: ~${wn} lbs${sc}${sw}</div>
+<div style="margin-bottom:10px">
+    <div class="role-row"><span class="role-label">Nurses</span><span class="role-note">need ${nn}</span>
+        <button class="role-btn" onclick="changeRole('nurses',-1)">−</button>
+        <span class="role-count ${GS.nurses>=nn?'':'warn'}">${GS.nurses}</span>
+        <button class="role-btn" onclick="changeRole('nurses',+1)">+</button></div>
+    <div class="role-row"><span class="role-label">Guards</span><span class="role-note">3+ repels wasps</span>
+        <button class="role-btn" onclick="changeRole('guards',-1)">−</button>
+        <span class="role-count ${GS.guards>=3?'':'warn'}">${GS.guards}</span>
+        <button class="role-btn" onclick="changeRole('guards',+1)">+</button></div>
+    <div class="role-row"><span class="role-label">Foraging</span><span class="role-note"></span><span style="width:34px"></span>
+        <span class="role-count">${GS.assignedBees}</span><span style="width:34px"></span></div>
+    <div class="role-row"><span class="role-label">Free</span><span class="role-note"></span><span style="width:34px"></span>
+        <span class="role-count ${free<3?'warn':''}">${free}</span><span style="width:34px"></span></div>
+</div>
+<div class="panel-actions">
+    ${GS.swarmPressure>40?'<button class="action-btn secondary" onclick="prepareSwarmCell()">Prepare swarm cell</button>':''}
+    <button class="action-btn danger-btn" onclick="newGame()">New colony</button>
+</div>`;
         return;
     }
-
-    // ── Regular tile ──
-    const stageEl = document.createElement('div');
-    stageEl.className = `panel-stage stage-${tile.stage}`;
-    stageEl.textContent = STAGE_NAMES[tile.stage];
-    body.appendChild(stageEl);
-
-    const dist = hdist(tile.q, tile.r, 0, 0);
-    let detail = '';
-    if (def.forage > 0) {
-        detail = `Forage yield: ${['','Low','Moderate','Good','High'][def.forage]}\nDistance: ${dist} tile${dist !== 1 ? 's' : ''}`;
-        if (dist > GS.forageRadius) detail += `\n⚠ Outside forage radius (${GS.forageRadius})`;
-    } else if (tile.type === 'DEAD_ZONE') {
-        detail = 'Barren land — no nectar.\nPollination from nearby tiles\nslowly restores this ground.';
-    } else if (tile.type === 'WATER') {
-        detail = 'Clean water.\nSupports colony health.\nBees drink here automatically.';
-    } else if (tile.type === 'STRUCTURE') {
-        detail = 'Abandoned structure.\nScouts could find a wild hive\nor useful resources inside.';
-    }
-    const detailEl = document.createElement('div');
-    detailEl.className = 'panel-detail'; detailEl.textContent = detail;
-    body.appendChild(detailEl);
-
-    const actEl = document.createElement('div');
-    actEl.className = 'panel-actions';
-    const tileKey = hkey(tile.q, tile.r);
-
-    if (def.forage > 0 && dist <= GS.forageRadius && tile.stage > 0) {
-        const already = GS.forageTiles[tileKey] || 0;
-        const btn = document.createElement('button');
-        btn.className = 'action-btn';
-        if (already > 0) {
-            btn.textContent = `Recall (${already} foraging)`;
-            btn.onclick = () => {
-                GS.assignedBees -= already;
-                delete GS.forageTiles[tileKey];
-                closePanel();
-                if (window._scene) window._scene.refreshTiles();
-            };
-        } else {
-            const free = GS.bees - GS.assignedBees - GS.nurses - GS.guards;
-            btn.textContent = free > 0 ? 'Send foragers' : 'No free bees';
-            btn.disabled    = free <= 0;
-            btn.onclick = () => {
-                const n = Math.max(1, Math.min(5, Math.floor(free * 0.3)));
-                GS.forageTiles[tileKey] = n; GS.assignedBees += n;
-                closePanel(); if (window._scene) window._scene.refreshTiles();
-            };
+    const st=document.createElement('div');st.className=`panel-stage stage-${tile.stage}`;st.textContent=STAGE_NAMES[tile.stage];body.appendChild(st);
+    const dist=hdist(tile.q,tile.r,0,0);
+    let detail='';
+    if(def.forage>0){detail=`Forage yield: ${['','Low','Moderate','Good','High'][def.forage]}\nDistance: ${dist} hex${dist!==1?'es':''}`;if(dist>GS.forageRadius)detail+=`\n⚠ Outside forage range (${GS.forageRadius})`;}
+    else if(tile.type==='DEAD_ZONE')detail='Barren land. No nectar blooms here.\nPollination from nearby tiles may slowly restore it.';
+    else if(tile.type==='WATER')detail='Clean water source.\nBees drink here to support health and honey curing.';
+    else if(tile.type==='STRUCTURE')detail='An abandoned structure.\nScouts may find resources or a wild hive sheltering inside.';
+    const db=document.createElement('div');db.className='panel-body';db.textContent=detail;body.appendChild(db);
+    const ab=document.createElement('div');ab.className='panel-actions';
+    const tileKey=hkey(tile.q,tile.r);
+    if(def.forage>0&&dist<=GS.forageRadius&&tile.stage>0){
+        const already=GS.forageTiles[tileKey]||0;
+        const btn=document.createElement('button');btn.className='action-btn';
+        if(already>0){
+            btn.textContent=`Recall (${already} foraging)`;
+            btn.onclick=()=>{GS.assignedBees-=already;delete GS.forageTiles[tileKey];closePanel();if(window._scene)window._scene.refreshTiles();saveGame();};
+        }else{
+            const free=GS.bees-GS.assignedBees-GS.nurses-GS.guards;
+            btn.textContent=free>0?'Send foragers':'No free bees';btn.disabled=free<=0;
+            btn.onclick=()=>{const n=Math.max(1,Math.min(5,Math.floor(free*.3)));GS.forageTiles[tileKey]=n;GS.assignedBees+=n;closePanel();if(window._scene)window._scene.refreshTiles();saveGame();};
         }
-        actEl.appendChild(btn);
+        ab.appendChild(btn);
     }
-
-    if (dist > GS.forageRadius || tile.type === 'STRUCTURE') {
-        const scouting = GS.scoutMissions.find(m => m.key === tileKey);
-        const btn = document.createElement('button');
-        btn.className = 'action-btn secondary';
-        if (scouting) { btn.textContent = `Scouting… (${scouting.daysLeft}d)`; btn.disabled = true; }
-        else { btn.textContent = tile.type === 'STRUCTURE' ? 'Scout building' : 'Send scouts'; btn.onclick = () => sendScout(tileKey, tile.q, tile.r); }
-        actEl.appendChild(btn);
+    if(dist>GS.forageRadius||tile.type==='STRUCTURE'){
+        const scouting=GS.scoutMissions.find(m=>m.key===tileKey);
+        const btn=document.createElement('button');btn.className='action-btn secondary';
+        if(scouting){btn.textContent=`Scouting… (${scouting.daysLeft}d)`;btn.disabled=true;}
+        else{btn.textContent=tile.type==='STRUCTURE'?'Scout building':'Send scouts';btn.onclick=()=>sendScout(tileKey,tile.q,tile.r);}
+        ab.appendChild(btn);
     }
-    body.appendChild(actEl);
+    body.appendChild(ab);
 }
+function openPanel(key){if(!GS.tiles[key])return;GS._fogPanelTile=null;GS.selectedKey=key;populatePanel(key);document.getElementById('tile-panel').classList.add('open');GS.panelOpen=true;}
+function openFogPanel(key,q,r){GS._fogPanelTile={q,r,_isFog:true};GS.selectedKey=key;populatePanel(key);document.getElementById('tile-panel').classList.add('open');GS.panelOpen=true;}
+function closePanel(){document.getElementById('tile-panel').classList.remove('open');GS.panelOpen=false;GS.selectedKey=null;GS._fogPanelTile=null;if(window._scene)window._scene.clearHighlight();}
+document.getElementById('panel-close').addEventListener('click',closePanel);
 
-function openPanel(key) {
-    if (!GS.tiles[key]) return;
-    GS._fogPanelTile = null; GS.selectedKey = key;
-    populatePanel(key);
-    document.getElementById('tile-panel').classList.add('open');
-    GS.panelOpen = true;
-}
-function openFogPanel(key, q, r) {
-    GS._fogPanelTile = { q, r, _isFog: true }; GS.selectedKey = key;
-    populatePanel(key);
-    document.getElementById('tile-panel').classList.add('open');
-    GS.panelOpen = true;
-}
-function closePanel() {
-    document.getElementById('tile-panel').classList.remove('open');
-    GS.panelOpen = false; GS.selectedKey = null; GS._fogPanelTile = null;
-    if (window._scene) window._scene.clearHighlight();
-}
-document.getElementById('panel-close').addEventListener('click', closePanel);
-
-// ══════════════════════════════════════════════
-// PHASER SCENE
-// ══════════════════════════════════════════════
-
+// ── PHASER SCENE ───────────────────────────────────────────
 class GameScene extends Phaser.Scene {
-    constructor() { super('GameScene'); }
-
-    create() {
-        window._scene = this;
-        GS.tiles = generateMap();
-        GS.fog   = generateFog(GS.tiles);
-
-        this.bgGfx   = this.add.graphics();
-        this.hlGfx   = this.add.graphics();
-        this.fxGfx   = this.add.graphics();
-        this.hiveGfx = this.add.graphics();
-        this.hiveGfx.setVisible(false);
-
-        this.drawAllTiles();
-        this.startHivePulse();
-
-        this.cameras.main.setScroll(
-            -this.cameras.main.width  / 2,
-            -this.cameras.main.height / 2,
-        );
-
-        this._drag = false; this._moved = false;
-        this._px = 0; this._py = 0; this._sx = 0; this._sy = 0;
-
-        this.input.on('pointerdown', p => {
-            this._drag = true; this._moved = false;
-            this._px = p.x; this._py = p.y;
-            this._sx = this.cameras.main.scrollX; this._sy = this.cameras.main.scrollY;
+    constructor(){super('GameScene');}
+    create(){
+        window._scene=this;
+        this.bgGfx=this.add.graphics();this.hlGfx=this.add.graphics();
+        this.fxGfx=this.add.graphics();this.hiveGfx=this.add.graphics();
+        this.hiveGfx.setVisible(false);this.foragerTexts={};
+        this.drawAllTiles();this.startHivePulse();
+        this.cameras.main.setScroll(-this.cameras.main.width/2,-this.cameras.main.height/2);
+        this._drag=false;this._moved=false;this._px=0;this._py=0;this._sx=0;this._sy=0;
+        this.input.on('pointerdown',p=>{this._drag=true;this._moved=false;this._px=p.x;this._py=p.y;this._sx=this.cameras.main.scrollX;this._sy=this.cameras.main.scrollY;});
+        this.input.on('pointermove',p=>{if(!this._drag)return;const dx=p.x-this._px,dy=p.y-this._py;if(Math.abs(dx)>6||Math.abs(dy)>6){this._moved=true;const z=this.cameras.main.zoom;this.cameras.main.setScroll(this._sx-dx/z,this._sy-dy/z);}});
+        this.input.on('pointerup',p=>{
+            this._drag=false;if(this._moved)return;
+            if(GS.view==='hive'){if(GS.panelOpen)closePanel();return;}
+            const wp=this.cameras.main.getWorldPoint(p.x,p.y);const{q,r}=p2h(wp.x,wp.y);const key=hkey(q,r);
+            if(GS.tiles[key]){this.drawHighlight(q,r);openPanel(key);}
+            else if(GS.fog[key]&&GS.fog[key].fogLevel===1){
+                const fog=GS.fog[key];const adj=neighbors(fog.q,fog.r).some(([nq,nr])=>GS.tiles[hkey(nq,nr)]);
+                if(adj){this.drawFogHighlight(fog.q,fog.r);openFogPanel(key,fog.q,fog.r);}
+                else if(GS.panelOpen)closePanel();
+            }else if(GS.panelOpen)closePanel();
         });
-        this.input.on('pointermove', p => {
-            if (!this._drag) return;
-            const dx = p.x - this._px, dy = p.y - this._py;
-            if (Math.abs(dx) > 6 || Math.abs(dy) > 6) {
-                this._moved = true;
-                const z = this.cameras.main.zoom;
-                this.cameras.main.setScroll(this._sx - dx / z, this._sy - dy / z);
-            }
-        });
-        this.input.on('pointerup', p => {
-            this._drag = false;
-            if (this._moved) return;
-            if (GS.view === 'hive') { if (GS.panelOpen) closePanel(); return; }
-            const wp  = this.cameras.main.getWorldPoint(p.x, p.y);
-            const { q, r } = p2h(wp.x, wp.y);
-            const key = hkey(q, r);
-            if (GS.tiles[key]) {
-                this.drawHighlight(q, r); openPanel(key);
-            } else if (GS.fog[key] && GS.fog[key].fogLevel === 1) {
-                const fog = GS.fog[key];
-                const adj = neighbors(fog.q, fog.r).some(([nq, nr]) => GS.tiles[hkey(nq, nr)]);
-                if (adj) { this.drawFogHighlight(fog.q, fog.r); openFogPanel(key, fog.q, fog.r); }
-                else if (GS.panelOpen) closePanel();
-            } else if (GS.panelOpen) { closePanel(); }
-        });
-
         updateHUD();
-        setTimeout(() => showToast('Tap your hive to assign nurses and guards'), 1500);
     }
 
-    // ── Map view ──
-    drawAllTiles() {
-        const g = this.bgGfx;
-        g.clear();
-
-        Object.values(GS.fog).forEach(({ q, r, fogLevel }) => {
-            const { x, y } = h2p(q, r);
-            const alpha = fogLevel === 1 ? 0.55 : 0.3;
-            g.fillStyle(0x060d06, alpha); g.lineStyle(1, 0x0c180c, alpha * 0.8);
-            this._hexPath(g, x, y, HEX.SIZE); g.fillPath(); g.strokePath();
-            if (fogLevel === 1 && GS.scoutMissions.find(m => m.key === hkey(q, r))) {
-                g.fillStyle(0xe09a18, 0.18);
-                this._hexPath(g, x, y, HEX.SIZE); g.fillPath();
-            }
+    drawAllTiles(){
+        const g=this.bgGfx;g.clear();
+        Object.values(GS.fog).forEach(({q,r,fogLevel})=>{
+            const{x,y}=h2p(q,r);const alpha=fogLevel===1?.5:.24;
+            g.fillStyle(0x050a05,alpha);g.lineStyle(1,0x0c180c,alpha*.7);
+            this._hp(g,x,y,HEX.SIZE);g.fillPath();g.strokePath();
+            if(fogLevel===1&&GS.scoutMissions.find(m=>m.key===hkey(q,r))){g.fillStyle(0xe09a18,.14);this._hp(g,x,y,HEX.SIZE);g.fillPath();}
         });
-
-        Object.values(GS.tiles).forEach(tile => {
-            const { x, y } = h2p(tile.q, tile.r);
-            const def = TILES[tile.type], s = tile.stage;
-            g.fillStyle(def.fill[s], 1); g.lineStyle(1.5, def.rim[s], 0.9);
-            this._hexPath(g, x, y, HEX.SIZE); g.fillPath(); g.strokePath();
-
-            if (tile.type === 'WATER')     { g.fillStyle(0x2060a0, 0.7); g.fillCircle(x, y, 5); }
-            else if (tile.type === 'STRUCTURE') { g.fillStyle(0x606060, 0.5); g.fillRect(x-5, y-5, 10, 10); }
-            else if (tile.type === 'DEAD_ZONE') {
-                g.lineStyle(1, 0x301808, 0.5);
-                g.lineBetween(x-5, y-5, x+5, y+5); g.lineBetween(x+5, y-5, x-5, y+5);
-            } else if (def.forage > 0 && s >= 2) {
-                g.fillStyle(0x80c040, 0.4);
-                g.fillCircle(x + HEX.SIZE * 0.52, y - HEX.SIZE * 0.38, 3);
+        Object.values(GS.tiles).forEach(tile=>{
+            const{x,y}=h2p(tile.q,tile.r);const def=TILES[tile.type];const s=tile.stage;
+            g.fillStyle(def.fill[s],1);g.lineStyle(1.5,def.rim[s],.9);
+            this._hp(g,x,y,HEX.SIZE);g.fillPath();g.strokePath();
+            // Distinctive type markers
+            if(tile.type==='WATER'){g.fillStyle(0x3060a0,.75);g.fillCircle(x,y,5);g.fillStyle(0x5080c0,.4);g.fillCircle(x,y,2.5);}
+            else if(tile.type==='STRUCTURE'){g.fillStyle(0x606058,.5);g.fillRect(x-5,y-4,10,8);g.lineStyle(1,0x808070,.4);g.strokeRect(x-5,y-4,10,8);}
+            else if(tile.type==='DEAD_ZONE'&&s===0){g.lineStyle(1,0x3a2010,.55);g.lineBetween(x-5,y-4,x+5,y+4);g.lineBetween(x+5,y-4,x-5,y+4);}
+            else if(tile.type==='SUNFLOWER'&&s>=2){
+                g.fillStyle(0xe8c028,.8);g.fillCircle(x,y,4.5);
+                for(let i=0;i<8;i++){const a=i*Math.PI/4+Math.PI/8;g.fillStyle(0xf0c820,.5);g.fillRect(x+6.5*Math.cos(a)-1,y+6.5*Math.sin(a)-1,2,2);}
             }
+            else if(tile.type==='CLOVER'&&s>=2){g.fillStyle(0x50c850,.65);[[-3.5,-3],[3.5,-3],[0,3.5]].forEach(([dx,dy])=>g.fillCircle(x+dx,y+dy,2.8));}
+            else if(tile.type==='WILDFLOWER'&&s>=2){g.fillStyle(0xe05890,.6);g.fillCircle(x+HEX.SIZE*.44,y-HEX.SIZE*.29,3.2);g.fillStyle(0xf0c030,.55);g.fillCircle(x-HEX.SIZE*.37,y+HEX.SIZE*.34,2.8);}
+            else if(tile.type==='FOREST'&&s>=2){g.fillStyle(0x1a5010,.72);for(let i=0;i<2;i++){const bx=x+(i-.5)*10;g.fillTriangle(bx,y-7.5,bx-4.5,y+2.5,bx+4.5,y+2.5);}}
         });
-
-        const hp = h2p(0, 0);
-        g.fillStyle(0xe09a18, 1); g.fillCircle(hp.x, hp.y, 7);
-        g.lineStyle(2, 0xf0bc40, 0.8); g.strokeCircle(hp.x, hp.y, 9);
-        g.lineStyle(1, 0xe09a18, 0.12);
-        g.strokeCircle(hp.x, hp.y, HEX.SIZE * HEX.SQRT3 * GS.forageRadius * 1.02);
+        const hp=h2p(0,0);
+        g.fillStyle(0xe09a18,1);g.fillCircle(hp.x,hp.y,7);g.lineStyle(2,0xf0bc40,.8);g.strokeCircle(hp.x,hp.y,9);
+        g.lineStyle(1,0xe09a18,.1);g.strokeCircle(hp.x,hp.y,HEX.SIZE*HEX.SQRT3*GS.forageRadius*1.02);
     }
 
-    // ── Hive interior ──
-    drawHiveInterior() {
-        const g = this.hiveGfx;
-        g.clear();
-
-        const S = 30;   // smaller hex for interior view
-        const SQ3 = Math.sqrt(3);
-        function hip(q, r) {
-            return { x: S * (SQ3 * q + SQ3/2 * r), y: S * 1.5 * r };
-        }
-        const hexPath = (cx, cy) => {
-            const pts = [];
-            for (let i = 0; i < 6; i++) {
-                const a = Math.PI / 180 * (60 * i - 30);
-                pts.push(cx + (S - 1.5) * Math.cos(a), cy + (S - 1.5) * Math.sin(a));
-            }
-            g.beginPath(); g.moveTo(pts[0], pts[1]);
-            for (let i = 2; i < 12; i += 2) g.lineTo(pts[i], pts[i+1]);
-            g.closePath();
-        };
-
-        const nursesNeeded = Math.max(1, Math.ceil(GS.bees / 20));
-        const nursesOk     = GS.nurses >= nursesNeeded;
-        const HONEY_MAX    = 90;  // lbs; 18 outer cells × 5 lbs each
-
-        // Pre-compute ring-2 and ring-3 ordered cell lists for fill indexing
-        const ring2 = hexesInRadius(0,0,2).filter(([hq,hr]) => hdist(hq,hr,0,0) === 2);
-        const ring3 = hexesInRadius(0,0,3).filter(([hq,hr]) => hdist(hq,hr,0,0) === 3);
-
-        hexesInRadius(0, 0, 3).forEach(([q, r]) => {
-            const dist    = hdist(q, r, 0, 0);
-            const { x, y } = hip(q, r);
-            let fill, rim, dotColor = null, dotRadius = 0;
-
-            if (q === 0 && r === 0) {
-                // Queen chamber — always glowing
-                fill = 0xb07010; rim = 0xf0c040;
-                dotColor = 0xffe060; dotRadius = 4;
-
-            } else if (dist === 1) {
-                // Brood ring — 6 cells staggered through the cycle
-                const cellIdx = neighbors(0,0).findIndex(([nq,nr]) => nq===q && nr===r);
-                const age     = (GS.broodProgress + cellIdx * 3) % 21;
-                if (!nursesOk) {
-                    fill = 0x0e0a06; rim = 0x1a1008;
-                } else if (age <= 2) {
-                    fill = 0x1a1410; rim = 0x302820; dotColor = 0xe8e8d8; dotRadius = 3;
-                } else if (age <= 8) {
-                    fill = 0x2c2418; rim = 0x4a3e28; dotColor = 0xd0c088; dotRadius = 5;
-                } else {
-                    fill = 0x7a5030; rim = 0xa07040;
+    drawHiveInterior(){
+        const g=this.hiveGfx;g.clear();
+        const S=30,SQ3=Math.sqrt(3);
+        const hip=(q,r)=>({x:S*(SQ3*q+SQ3/2*r),y:S*1.5*r});
+        const hpath=(cx,cy)=>{const pts=[];for(let i=0;i<6;i++){const a=Math.PI/180*(60*i-30);pts.push(cx+(S-1.5)*Math.cos(a),cy+(S-1.5)*Math.sin(a));}g.beginPath();g.moveTo(pts[0],pts[1]);for(let i=2;i<12;i+=2)g.lineTo(pts[i],pts[i+1]);g.closePath();};
+        const nn=Math.max(1,Math.ceil(GS.bees/20));
+        const nursesOk=GS.nurses>=nn;
+        const ring2=hexesInRadius(0,0,2).filter(([hq,hr])=>hdist(hq,hr,0,0)===2);
+        const ring3=hexesInRadius(0,0,3).filter(([hq,hr])=>hdist(hq,hr,0,0)===3);
+        const HMAX=90;
+        hexesInRadius(0,0,3).forEach(([q,r])=>{
+            const dist=hdist(q,r,0,0);const{x,y}=hip(q,r);
+            let fill,rim,dotColor=null,dotR=0;
+            if(q===0&&r===0){fill=0xb07010;rim=0xf0c040;dotColor=0xffe060;dotR=4;}
+            else if(dist===1){
+                const ci=neighbors(0,0).findIndex(([nq,nr])=>nq===q&&nr===r);
+                const age=(GS.broodProgress+ci*3)%21;
+                if(!nursesOk){fill=0x0c0906;rim=0x180e08;}
+                else if(age<=2){fill=0x1c1610;rim=0x302a20;dotColor=0xe8e8d8;dotR=3;}
+                else if(age<=8){fill=0x2c2618;rim=0x4a3e28;dotColor=0xd0c088;dotR=5;}
+                else{fill=0x7a5030;rim=0xa07040;}
+            }else if(dist===2){
+                if(GS.season==='Winter'||GS.season==='Fall'){
+                    const idx=ring2.findIndex(([hq,hr])=>hq===q&&hr===r);
+                    const filled=idx<Math.floor(Math.min(1,GS.honey/HMAX)*12);
+                    fill=filled?0xd08010:0x221808;rim=filled?0xe8a830:0x382412;
+                }else{
+                    const age=(GS.broodProgress+q*7+r*5+8)%21;
+                    if(!nursesOk){fill=0x0c0906;rim=0x180e08;}
+                    else if(age<=2){fill=0x1c1610;rim=0x302a20;dotColor=0xc8c8b8;dotR=2;}
+                    else if(age<=8){fill=0x2a2216;rim=0x483c26;dotColor=0xb8a870;dotR=4;}
+                    else{fill=0x604020;rim=0x806040;}
                 }
-
-            } else if (dist === 2) {
-                // Pollen/nectar ring — brood in summer, honey in fall/winter
-                if (GS.season === 'Winter' || GS.season === 'Fall') {
-                    const idx     = ring2.findIndex(([hq,hr]) => hq===q && hr===r);
-                    const filled  = idx < Math.floor(Math.min(1, GS.honey / HONEY_MAX) * 12);
-                    fill = filled ? 0xd08010 : 0x241808; rim = filled ? 0xe8a830 : 0x382412;
-                } else {
-                    const age = (GS.broodProgress + q * 7 + r * 5 + 8) % 21;
-                    if (!nursesOk) {
-                        fill = 0x0e0a06; rim = 0x1a1008;
-                    } else if (age <= 2) {
-                        fill = 0x1a1410; rim = 0x302820; dotColor = 0xc8c8b8; dotRadius = 2;
-                    } else if (age <= 8) {
-                        fill = 0x2a2216; rim = 0x483c26; dotColor = 0xb8a870; dotRadius = 4;
-                    } else {
-                        fill = 0x604020; rim = 0x806040;
-                    }
-                }
-
-            } else {
-                // Outer ring — honey storage, fills left-to-right as honey increases
-                const idx    = ring3.findIndex(([hq,hr]) => hq===q && hr===r);
-                const pct    = Math.min(1, GS.honey / HONEY_MAX);
-                const thresh = Math.floor(pct * 18);
-                if (idx < thresh) {
-                    fill = 0xe09a18; rim = 0xf0bc40;
-                } else if (idx === thresh && GS.honey > 0) {
-                    fill = 0x7a5010; rim = 0xb07820;
-                } else {
-                    fill = 0x1e1408; rim = 0x2e2010;
-                }
+            }else{
+                const idx=ring3.findIndex(([hq,hr])=>hq===q&&hr===r);
+                const pct=Math.min(1,GS.honey/HMAX);const thresh=Math.floor(pct*18);
+                if(idx<thresh){fill=0xe09a18;rim=0xf0bc40;}
+                else if(idx===thresh&&GS.honey>0){fill=0x7a5010;rim=0xb07820;}
+                else{fill=0x1c1408;rim=0x2c1e0e;}
             }
-
-            g.fillStyle(fill, 1);
-            g.lineStyle(1.5, rim, 0.9);
-            hexPath(x, y);
-            g.fillPath(); g.strokePath();
-
-            if (dotColor !== null) {
-                g.fillStyle(dotColor, 0.9);
-                g.fillCircle(x, y, dotRadius);
-            }
+            g.fillStyle(fill,1);g.lineStyle(1.5,rim,.9);hpath(x,y);g.fillPath();g.strokePath();
+            if(dotColor!==null){g.fillStyle(dotColor,.9);g.fillCircle(x,y,dotR);}
         });
     }
 
-    drawHighlight(q, r) {
-        const { x, y } = h2p(q, r);
-        this.hlGfx.clear();
-        this.hlGfx.lineStyle(2, 0xe09a18, 0.7);
-        this._hexPath(this.hlGfx, x, y, HEX.SIZE);
-        this.hlGfx.strokePath();
-    }
-    drawFogHighlight(q, r) {
-        const { x, y } = h2p(q, r);
-        this.hlGfx.clear();
-        this.hlGfx.lineStyle(1.5, 0xe09a18, 0.35);
-        this._hexPath(this.hlGfx, x, y, HEX.SIZE);
-        this.hlGfx.strokePath();
-    }
-    clearHighlight() { this.hlGfx.clear(); }
+    drawHighlight(q,r){const{x,y}=h2p(q,r);this.hlGfx.clear();this.hlGfx.lineStyle(2,0xe09a18,.7);this._hp(this.hlGfx,x,y,HEX.SIZE);this.hlGfx.strokePath();}
+    drawFogHighlight(q,r){const{x,y}=h2p(q,r);this.hlGfx.clear();this.hlGfx.lineStyle(1.5,0xe09a18,.3);this._hp(this.hlGfx,x,y,HEX.SIZE);this.hlGfx.strokePath();}
+    clearHighlight(){this.hlGfx.clear();}
 
-    startHivePulse() {
-        const { x, y } = h2p(0, 0);
-        const state = { r: HEX.SIZE * 0.5, a: 0.5 };
-        const g = this.fxGfx;
-        this.tweens.add({
-            targets: state, r: HEX.SIZE * 1.6, a: 0,
-            duration: 2200, repeat: -1, ease: 'Sine.easeOut',
-            onUpdate: () => { g.clear(); g.lineStyle(1.5, 0xe09a18, state.a); g.strokeCircle(x, y, state.r); },
-        });
+    startHivePulse(){
+        const{x,y}=h2p(0,0);const state={r:HEX.SIZE*.5,a:.5};
+        this._pulseT=this.tweens.add({targets:state,r:HEX.SIZE*1.7,a:0,duration:2400,repeat:-1,ease:'Sine.easeOut',
+            onUpdate:()=>{this.fxGfx.clear();this.fxGfx.lineStyle(1.5,0xe09a18,state.a);this.fxGfx.strokeCircle(x,y,state.r);}});
     }
+    restartPulse(){if(this._pulseT)this._pulseT.stop();this.fxGfx.clear();this.startHivePulse();}
+    _hp(g,cx,cy,size){const pts=corners(cx,cy,size-1.5);g.beginPath();g.moveTo(pts[0],pts[1]);for(let i=2;i<12;i+=2)g.lineTo(pts[i],pts[i+1]);g.closePath();}
 
-    _hexPath(g, cx, cy, size) {
-        const pts = corners(cx, cy, size - 1.5);
-        g.beginPath(); g.moveTo(pts[0], pts[1]);
-        for (let i = 2; i < 12; i += 2) g.lineTo(pts[i], pts[i+1]);
-        g.closePath();
+    update(time,delta){
+        GS._elapsed+=delta*GS.speed;
+        if(GS._elapsed>=GS.dayMs){GS._elapsed-=GS.dayMs;advanceDay();}
     }
-
-    update(time, delta) {
-        GS._elapsed += delta * GS.speed;
-        if (GS._elapsed >= GS.dayMs) {
-            GS._elapsed -= GS.dayMs;
-            advanceDay();
-        }
-    }
-
-    refreshTiles() {
-        if (GS.view === 'hive') { this.drawHiveInterior(); return; }
+    refreshTiles(){
+        if(GS.view==='hive'){this.drawHiveInterior();return;}
         this.drawAllTiles();
-        this.foragerTexts = this.foragerTexts || {};
-        Object.values(this.foragerTexts).forEach(t => t.destroy());
-        this.foragerTexts = {};
-        Object.entries(GS.forageTiles).forEach(([key, count]) => {
-            const tile = GS.tiles[key]; if (!tile) return;
-            const { x, y } = h2p(tile.q, tile.r);
-            const t = this.add.text(x, y + HEX.SIZE * 0.55, `${count}`, {
-                font: '11px Courier New', fill: '#e09a18', stroke: '#080f08', strokeThickness: 3,
-            }).setOrigin(0.5, 0.5);
-            this.foragerTexts[key] = t;
+        Object.values(this.foragerTexts).forEach(t=>t.destroy());this.foragerTexts={};
+        Object.entries(GS.forageTiles).forEach(([key,count])=>{
+            const tile=GS.tiles[key];if(!tile)return;
+            const{x,y}=h2p(tile.q,tile.r);
+            const t=this.add.text(x,y+HEX.SIZE*.56,`${count}`,{font:'11px Courier New',fill:'#e09a18',stroke:'#050a05',strokeThickness:3}).setOrigin(.5,.5);
+            this.foragerTexts[key]=t;
         });
-        this.children.bringToTop(this.hlGfx);
-        this.children.bringToTop(this.fxGfx);
-        Object.values(this.foragerTexts).forEach(t => this.children.bringToTop(t));
+        this.children.bringToTop(this.hlGfx);this.children.bringToTop(this.fxGfx);
+        Object.values(this.foragerTexts).forEach(t=>this.children.bringToTop(t));
     }
 }
 
-// ══════════════════════════════════════════════
-// LAUNCH
-// ══════════════════════════════════════════════
-
-const game = new Phaser.Game({
-    type: Phaser.AUTO, backgroundColor: '#080f08',
-    width: window.innerWidth, height: window.innerHeight,
-    scene: [GameScene],
-    scale: { mode: Phaser.Scale.RESIZE, autoCenter: Phaser.Scale.CENTER_BOTH },
-    input: { activePointers: 2 },
+// ── LAUNCH ─────────────────────────────────────────────────
+const game=new Phaser.Game({
+    type:Phaser.AUTO,backgroundColor:'#080f08',
+    width:window.innerWidth,height:window.innerHeight,
+    scene:[GameScene],
+    scale:{mode:Phaser.Scale.RESIZE,autoCenter:Phaser.Scale.CENTER_BOTH},
+    input:{activePointers:2},
+    callbacks:{
+        postBoot:()=>{
+            const loaded=loadGame();
+            if(!loaded){
+                GS.tiles=generateMap();GS.fog=generateFog(GS.tiles);
+                document.getElementById('intro-overlay').style.display='flex';
+            }
+            updateHUD();
+        }
+    }
 });
-
-window.addEventListener('resize', () => game.scale.resize(window.innerWidth, window.innerHeight));
-
-if ('serviceWorker' in navigator)
-    window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {}));
+window.addEventListener('resize',()=>game.scale.resize(window.innerWidth,window.innerHeight));
+if('serviceWorker' in navigator)
+    window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));
 </script>
 </body>
 </html>

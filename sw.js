@@ -1,4 +1,4 @@
-const CACHE = 'apiary-v4';
+const CACHE = 'apiary-v5';
 const BASE = self.registration.scope;
 const ASSETS = [
     BASE,
