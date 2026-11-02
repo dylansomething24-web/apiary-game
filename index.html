@@ -18,8 +18,8 @@
         #hud {
             position: fixed; top: 0; left: 0; right: 0; z-index: 50;
             display: flex; justify-content: space-between; align-items: flex-start;
-            padding: env(safe-area-inset-top, 12px) 20px 0;
             padding-top: max(env(safe-area-inset-top, 0px), 12px);
+            padding-left: 20px; padding-right: 20px;
             pointer-events: none;
             background: linear-gradient(to bottom, rgba(8,15,8,0.9) 60%, transparent);
             padding-bottom: 20px;
@@ -31,17 +31,30 @@
         .hud-season { font: 400 14px/1 Georgia, serif; color: #c8a860; letter-spacing: 1px; }
         .hud-day    { font: 400 11px/1.4 'Courier New', monospace; color: #3a5a30; letter-spacing: 1px; margin-top: 2px; }
 
-        #phase-tag {
+        /* View tabs */
+        #view-tabs {
             position: fixed; top: 68px; left: 50%; transform: translateX(-50%);
-            z-index: 49; pointer-events: none;
-            font: 400 10px/1 'Courier New', monospace; letter-spacing: 3px; text-transform: uppercase;
-            color: #2a4a28; padding: 4px 14px; border: 1px solid #1a3018; border-radius: 20px;
-            background: rgba(8,15,8,0.7);
+            z-index: 49; display: flex; border: 1px solid #1a3018; border-radius: 20px;
+            background: rgba(8,15,8,0.85); overflow: hidden;
+        }
+        .view-tab {
+            padding: 6px 20px; border: none; background: none;
+            font: 400 10px/1 'Courier New', monospace; letter-spacing: 2px; text-transform: uppercase;
+            color: #2a4a28; cursor: pointer;
+        }
+        .view-tab.active { background: rgba(224,154,24,0.12); color: #c8a040; }
+
+        /* Hive interior subtext */
+        #hive-subtext {
+            position: fixed; top: 98px; left: 50%; transform: translateX(-50%);
+            z-index: 48; pointer-events: none; display: none;
+            font: 400 10px/1 'Courier New', monospace; color: #2a4a28; letter-spacing: 1px;
+            white-space: nowrap;
         }
 
-        /* Toast notifications */
+        /* Toasts */
         #toast-container {
-            position: fixed; top: 88px; left: 50%; transform: translateX(-50%);
+            position: fixed; top: 110px; left: 50%; transform: translateX(-50%);
             z-index: 100; display: flex; flex-direction: column; align-items: center;
             gap: 8px; pointer-events: none; width: calc(100% - 40px); max-width: 320px;
         }
@@ -81,13 +94,13 @@
             flex: 1; padding: 11px 8px; min-width: 100px;
             background: rgba(224,154,24,0.08); border: 1px solid rgba(224,154,24,0.25);
             border-radius: 6px; color: #c8a040; font: 400 13px/1 Georgia, serif;
-            cursor: pointer; text-align: center; transition: background .15s, border-color .15s;
+            cursor: pointer; text-align: center;
         }
-        .action-btn:active { background: rgba(224,154,24,0.2); border-color: rgba(224,154,24,0.5); }
+        .action-btn:active { background: rgba(224,154,24,0.2); }
         .action-btn.secondary { background: rgba(60,90,40,0.12); border-color: rgba(80,120,50,0.3); color: #608050; }
         .action-btn:disabled { opacity: 0.4; cursor: default; }
 
-        /* Role assignment rows */
+        /* Role rows */
         .role-section { margin-bottom: 12px; }
         .role-row { display: flex; align-items: center; gap: 8px; padding: 7px 0; border-bottom: 1px solid #0e1a0e; }
         .role-row:last-child { border-bottom: none; }
@@ -134,7 +147,12 @@
     </div>
 </div>
 
-<div id="phase-tag">Phase I — Colony</div>
+<div id="view-tabs">
+    <button class="view-tab active" id="tab-map"  onclick="switchView('map')">Foraging</button>
+    <button class="view-tab"        id="tab-hive" onclick="switchView('hive')">Hive</button>
+</div>
+
+<div id="hive-subtext"></div>
 <div id="toast-container"></div>
 
 <div id="tile-panel">
@@ -261,15 +279,14 @@ function generateMap() {
         const j = Math.floor(Math.random() * (i + 1));
         [pool[i], pool[j]] = [pool[j], pool[i]];
     }
-    let poolIdx = 0;
+    let idx = 0;
     allHexes.forEach(([q, r]) => {
-        const key  = hkey(q, r);
-        const dist = hdist(q, r, 0, 0);
+        const key = hkey(q, r), dist = hdist(q, r, 0, 0);
         let type, stage;
         if (q === 0 && r === 0) {
             type = 'HIVE_BOX'; stage = 3;
         } else {
-            type = pool[poolIdx++ % pool.length];
+            type = pool[idx++ % pool.length];
             if      (type === 'WATER')     stage = 3;
             else if (type === 'DEAD_ZONE') stage = 0;
             else if (dist <= 1)            stage = 2;
@@ -281,8 +298,7 @@ function generateMap() {
 }
 
 function generateFog(tiles) {
-    const fog   = {};
-    const known = new Set(Object.keys(tiles));
+    const fog = {}, known = new Set(Object.keys(tiles));
     known.forEach(k => {
         const { q, r } = tiles[k];
         neighbors(q, r).forEach(([nq, nr]) => {
@@ -308,17 +324,15 @@ function generateFog(tiles) {
 
 const GS = {
     bees: 15, honey: 0,
-    nurses: 2,          // tending brood
-    guards: 0,          // defending hive
+    nurses: 2, guards: 0,
     season: 'Spring', day: 1, year: 1,
     forageRadius: 1,
-    forageTiles: {},    // key → forager count
-    assignedBees: 0,    // total foraging
+    forageTiles: {}, assignedBees: 0,
     broodProgress: 0,
-    scoutMissions: [],  // [{key, q, r, daysLeft}]
+    scoutMissions: [],
     tiles: {}, fog: {},
-    selectedKey: null, panelOpen: false,
-    _fogPanelTile: null,
+    view: 'map',
+    selectedKey: null, panelOpen: false, _fogPanelTile: null,
     speed: 1, dayMs: 3000, _elapsed: 0, _honeyFrac: 0,
     _warnedLowHoney: false, _warnedWinter: false,
     _nextThreat: 40,
@@ -341,21 +355,15 @@ function showToast(msg, type = '') {
 // ══════════════════════════════════════════════
 
 function seasonFromDay(day) {
-    const doy = (day - 1) % 100;
-    let acc = 0;
-    for (let i = 0; i < SEASONS.length; i++) {
-        acc += SEASON_DAYS[i];
-        if (doy < acc) return SEASONS[i];
-    }
+    const doy = (day - 1) % 100; let acc = 0;
+    for (let i = 0; i < SEASONS.length; i++) { acc += SEASON_DAYS[i]; if (doy < acc) return SEASONS[i]; }
     return SEASONS[3];
 }
 
 function seasonProgress() {
-    const doy = (GS.day - 1) % 100;
-    let acc = 0;
+    const doy = (GS.day - 1) % 100; let acc = 0;
     for (let i = 0; i < SEASONS.length; i++) {
-        if (doy < acc + SEASON_DAYS[i])
-            return `Day ${doy - acc + 1}/${SEASON_DAYS[i]}`;
+        if (doy < acc + SEASON_DAYS[i]) return `Day ${doy - acc + 1}/${SEASON_DAYS[i]}`;
         acc += SEASON_DAYS[i];
     }
     return '';
@@ -368,6 +376,11 @@ function updateHUD() {
     document.getElementById('hud-season').textContent = GS.season;
     document.getElementById('hud-day').textContent    = `${seasonProgress()} · Year ${GS.year}`;
     document.getElementById('range-hint').textContent = `${free} free · ${GS.assignedBees} foraging`;
+
+    // Hive subtext when on hive view
+    const nursesNeeded = Math.max(1, Math.ceil(GS.bees / 20));
+    document.getElementById('hive-subtext').textContent =
+        `nurses ${GS.nurses}/${nursesNeeded} · brood day ${GS.broodProgress + 1}/21 · guards ${GS.guards}`;
 }
 
 // ══════════════════════════════════════════════
@@ -377,7 +390,6 @@ function updateHUD() {
 function advanceDay() {
     GS.day++;
     GS.season = seasonFromDay(GS.day);
-
     const doy = (GS.day - 1) % 100;
     if (doy === 0 && GS.day > 1) {
         GS.year++;
@@ -385,7 +397,7 @@ function advanceDay() {
         GS._warnedLowHoney = false;
     }
 
-    // Honey from foragers
+    // Honey from foragers — 0.02 per forager per forage-rating per day
     let gained = 0;
     Object.entries(GS.forageTiles).forEach(([key, count]) => {
         const tile = GS.tiles[key];
@@ -393,29 +405,24 @@ function advanceDay() {
         const def = TILES[tile.type];
         if (def && def.forage > 0) {
             const eff = GS.season === 'Winter' ? 0 : GS.season === 'Fall' ? 0.6 : 1.0;
-            gained += def.forage * count * 0.08 * eff;
+            gained += def.forage * count * 0.02 * eff;
         }
     });
 
-    // Winter consumption
+    // Winter honey consumption
     const consumed = GS.season === 'Winter' ? GS.bees * 0.08 : 0;
-
     GS._honeyFrac += gained - consumed;
     if (GS._honeyFrac >= 1) {
         const n = Math.floor(GS._honeyFrac);
-        GS.honey += n;
-        GS._honeyFrac -= n;
+        GS.honey += n; GS._honeyFrac -= n;
     } else if (GS._honeyFrac < 0) {
         if (GS.honey > 0) {
             const n = Math.min(GS.honey, Math.ceil(-GS._honeyFrac));
-            GS.honey -= n;
-            GS._honeyFrac += n;
-        } else {
-            GS._honeyFrac = 0;
-        }
+            GS.honey -= n; GS._honeyFrac += n;
+        } else { GS._honeyFrac = 0; }
     }
 
-    // Winter starvation — bees die without honey
+    // Winter starvation
     if (GS.season === 'Winter' && GS.honey === 0) {
         const lost = Math.max(1, Math.floor(GS.bees * 0.04));
         GS.bees = Math.max(3, GS.bees - lost);
@@ -423,21 +430,19 @@ function advanceDay() {
         if (GS.day % 3 === 0) showToast(`${lost} bees lost to cold`, 'danger');
     }
 
-    // Brood cycle (requires nurses)
+    // Brood cycle — requires nurses
     const nursesNeeded = Math.max(1, Math.ceil(GS.bees / 20));
     GS.broodProgress++;
     if (GS.broodProgress >= 21) {
         GS.broodProgress = 0;
         if (GS.season !== 'Winter') {
-            if (GS.nurses >= nursesNeeded) {
+            if (GS.nurses >= nursesNeeded)
                 GS.bees += Math.max(1, Math.floor(GS.bees * 0.04));
-            } else {
+            else
                 showToast(`Brood failing — need ${nursesNeeded} nurses (have ${GS.nurses})`, 'warn');
-            }
         }
     }
 
-    // Forage radius
     if (GS.bees >= 100) GS.forageRadius = 2;
     if (GS.bees >= 400) GS.forageRadius = 3;
 
@@ -464,13 +469,10 @@ function advanceDay() {
     }
 
     // Warnings
-    if (!GS._warnedWinter && doy === 78) {  // 7 days before winter
+    if (!GS._warnedWinter && doy === 78) {
         GS._warnedWinter = true;
         const need = Math.ceil(GS.bees * 0.08 * 15);
-        showToast(
-            `Winter in 7 days — need ~${need} lbs (have ${GS.honey})`,
-            GS.honey < need ? 'warn' : ''
-        );
+        showToast(`Winter in 7 days — need ~${need} lbs (have ${GS.honey})`, GS.honey < need ? 'warn' : '');
     }
     if (!GS._warnedLowHoney && GS.honey < 8 && GS.honey > 0 && GS.season !== 'Winter') {
         GS._warnedLowHoney = true;
@@ -484,7 +486,7 @@ function advanceDay() {
 
 function _clampRoles() {
     GS.nurses = Math.min(GS.nurses, Math.floor(GS.bees * 0.5));
-    GS.guards = Math.min(GS.guards, Math.floor(GS.bees * 0.3));
+    GS.guards  = Math.min(GS.guards,  Math.floor(GS.bees * 0.3));
     GS.assignedBees = Math.min(GS.assignedBees, GS.bees - GS.nurses - GS.guards);
 }
 
@@ -508,7 +510,7 @@ function triggerThreat() {
         _clampRoles();
         showToast(`Mite infestation — ${lost} bees lost`, 'danger');
     } else if (roll < 0.85) {
-        showToast('A wild swarm was spotted nearby — scout the fog');
+        showToast('A wild swarm spotted nearby — scout the fog to find it');
     } else {
         const bonus = 2 + Math.floor(Math.random() * 4);
         GS.honey += bonus;
@@ -522,12 +524,8 @@ function triggerThreat() {
 // ══════════════════════════════════════════════
 
 function sendScout(key, q, r) {
-    if (GS.scoutMissions.find(m => m.key === key)) {
-        showToast('Already scouting this area'); return;
-    }
-    if (GS.scoutMissions.length >= 3) {
-        showToast('Already running 3 scout missions', 'warn'); return;
-    }
+    if (GS.scoutMissions.find(m => m.key === key)) { showToast('Already scouting this area'); return; }
+    if (GS.scoutMissions.length >= 3) { showToast('Already running 3 scout missions', 'warn'); return; }
     GS.scoutMissions.push({ key, q, r, daysLeft: 3 });
     showToast('Scouts dispatched — returns in 3 days');
     closePanel();
@@ -540,7 +538,6 @@ function revealScoutedTile(key, q, r) {
     const type  = pool[Math.floor(Math.random() * pool.length)];
     GS.tiles[key] = { q, r, type, stage: type === 'DEAD_ZONE' ? 0 : 1, territory: 'scouted', foragers: 0 };
     showToast(`Scouts found: ${TILES[type].name}`, type === 'DEAD_ZONE' ? 'warn' : '');
-    // Expand fog ring
     const known = new Set(Object.keys(GS.tiles));
     neighbors(q, r).forEach(([nq, nr]) => {
         const nk = hkey(nq, nr);
@@ -567,16 +564,36 @@ function changeRole(role, delta) {
 }
 
 // ══════════════════════════════════════════════
-// SPEED
+// SPEED & VIEW
 // ══════════════════════════════════════════════
 
 function cycleSpeed() {
     const steps  = [0.5, 1, 2, 4];
     const labels = ['½×', '1×', '2×', '4×'];
-    const idx  = steps.indexOf(GS.speed);
-    const next = (idx + 1) % steps.length;
+    const next = (steps.indexOf(GS.speed) + 1) % steps.length;
     GS.speed = steps[next];
     document.getElementById('speed-btn').textContent = labels[next];
+}
+
+function switchView(v) {
+    GS.view = v;
+    document.getElementById('tab-map').classList.toggle('active', v === 'map');
+    document.getElementById('tab-hive').classList.toggle('active', v === 'hive');
+    document.getElementById('hive-subtext').style.display = v === 'hive' ? 'block' : 'none';
+    closePanel();
+    if (!window._scene) return;
+    const s = window._scene;
+    s.bgGfx.setVisible(v === 'map');
+    s.hlGfx.setVisible(v === 'map');
+    s.fxGfx.setVisible(v === 'map');
+    s.hiveGfx.setVisible(v === 'hive');
+    if (s.foragerTexts)
+        Object.values(s.foragerTexts).forEach(t => t.setVisible(v === 'map'));
+    if (v === 'hive') {
+        s.cameras.main.setScroll(-s.cameras.main.width / 2, -s.cameras.main.height / 2);
+        s.drawHiveInterior();
+    }
+    updateHUD();
 }
 
 // ══════════════════════════════════════════════
@@ -586,7 +603,6 @@ function cycleSpeed() {
 function populatePanel(key) {
     const tile = GS.tiles[key] || GS._fogPanelTile;
     if (!tile) return;
-
     const body = document.getElementById('panel-body');
     body.innerHTML = '';
 
@@ -594,33 +610,26 @@ function populatePanel(key) {
     if (tile._isFog) {
         document.getElementById('panel-name').textContent = 'Unknown Territory';
         const scouting = GS.scoutMissions.find(m => m.key === key);
-        if (scouting) {
-            body.innerHTML = `
-                <div class="panel-stage stage-0">Scouting…</div>
-                <div class="panel-detail">Scouts return in ${scouting.daysLeft} day${scouting.daysLeft !== 1 ? 's' : ''}.</div>`;
-        } else {
-            body.innerHTML = `
-                <div class="panel-stage stage-0">Unexplored</div>
-                <div class="panel-detail">Unknown land beyond your territory.
+        body.innerHTML = scouting
+            ? `<div class="panel-stage stage-0">Scouting…</div>
+               <div class="panel-detail">Scouts return in ${scouting.daysLeft} day${scouting.daysLeft !== 1 ? 's' : ''}.</div>`
+            : `<div class="panel-stage stage-0">Unexplored</div>
+               <div class="panel-detail">Unknown land beyond your territory.
 Scouts will map what lives here.</div>
-                <div class="panel-actions">
-                    <button class="action-btn secondary" onclick="sendScout('${key}',${tile.q},${tile.r})">Send scouts</button>
-                </div>`;
-        }
+               <div class="panel-actions"><button class="action-btn secondary" onclick="sendScout('${key}',${tile.q},${tile.r})">Send scouts</button></div>`;
         return;
     }
 
     const def = TILES[tile.type];
     document.getElementById('panel-name').textContent = def.name;
 
-    // ── Hive ──
+    // ── Hive panel ──
     if (tile.type === 'HIVE_BOX') {
         const nursesNeeded = Math.max(1, Math.ceil(GS.bees / 20));
         const free         = Math.max(0, GS.bees - GS.assignedBees - GS.nurses - GS.guards);
         const winterNeed   = Math.ceil(GS.bees * 0.08 * 15);
         const scoutLine    = GS.scoutMissions.length > 0
-            ? `\n${GS.scoutMissions.length} scout mission${GS.scoutMissions.length > 1 ? 's' : ''} active`
-            : '';
+            ? `\n${GS.scoutMissions.length} scout mission${GS.scoutMissions.length > 1 ? 's' : ''} active` : '';
         const nursesOk = GS.nurses >= nursesNeeded;
 
         body.innerHTML = `
@@ -642,15 +651,13 @@ Est. winter need: ~${winterNeed} lbs${scoutLine}</div>
                     <button class="role-btn" onclick="changeRole('guards',+1)">+</button>
                 </div>
                 <div class="role-row">
-                    <span class="role-label">Foraging</span>
-                    <span class="role-note"></span>
+                    <span class="role-label">Foraging</span><span class="role-note"></span>
                     <span style="width:32px"></span>
                     <span class="role-count">${GS.assignedBees}</span>
                     <span style="width:32px"></span>
                 </div>
                 <div class="role-row">
-                    <span class="role-label">Free</span>
-                    <span class="role-note"></span>
+                    <span class="role-label">Free</span><span class="role-note"></span>
                     <span style="width:32px"></span>
                     <span class="role-count ${free < 3 ? 'warn' : ''}">${free}</span>
                     <span style="width:32px"></span>
@@ -661,15 +668,14 @@ Est. winter need: ~${winterNeed} lbs${scoutLine}</div>
 
     // ── Regular tile ──
     const stageEl = document.createElement('div');
-    stageEl.className   = `panel-stage stage-${tile.stage}`;
+    stageEl.className = `panel-stage stage-${tile.stage}`;
     stageEl.textContent = STAGE_NAMES[tile.stage];
     body.appendChild(stageEl);
 
     const dist = hdist(tile.q, tile.r, 0, 0);
     let detail = '';
     if (def.forage > 0) {
-        detail = `Forage yield: ${ ['','Low','Moderate','Good','High'][def.forage] }
-Distance: ${dist} tile${dist !== 1 ? 's' : ''}`;
+        detail = `Forage yield: ${['','Low','Moderate','Good','High'][def.forage]}\nDistance: ${dist} tile${dist !== 1 ? 's' : ''}`;
         if (dist > GS.forageRadius) detail += `\n⚠ Outside forage radius (${GS.forageRadius})`;
     } else if (tile.type === 'DEAD_ZONE') {
         detail = 'Barren land — no nectar.\nPollination from nearby tiles\nslowly restores this ground.';
@@ -678,10 +684,8 @@ Distance: ${dist} tile${dist !== 1 ? 's' : ''}`;
     } else if (tile.type === 'STRUCTURE') {
         detail = 'Abandoned structure.\nScouts could find a wild hive\nor useful resources inside.';
     }
-
     const detailEl = document.createElement('div');
-    detailEl.className   = 'panel-detail';
-    detailEl.textContent = detail;
+    detailEl.className = 'panel-detail'; detailEl.textContent = detail;
     body.appendChild(detailEl);
 
     const actEl = document.createElement('div');
@@ -706,10 +710,8 @@ Distance: ${dist} tile${dist !== 1 ? 's' : ''}`;
             btn.disabled    = free <= 0;
             btn.onclick = () => {
                 const n = Math.max(1, Math.min(5, Math.floor(free * 0.3)));
-                GS.forageTiles[tileKey] = n;
-                GS.assignedBees += n;
-                closePanel();
-                if (window._scene) window._scene.refreshTiles();
+                GS.forageTiles[tileKey] = n; GS.assignedBees += n;
+                closePanel(); if (window._scene) window._scene.refreshTiles();
             };
         }
         actEl.appendChild(btn);
@@ -719,44 +721,31 @@ Distance: ${dist} tile${dist !== 1 ? 's' : ''}`;
         const scouting = GS.scoutMissions.find(m => m.key === tileKey);
         const btn = document.createElement('button');
         btn.className = 'action-btn secondary';
-        if (scouting) {
-            btn.textContent = `Scouting… (${scouting.daysLeft}d)`;
-            btn.disabled    = true;
-        } else {
-            btn.textContent = tile.type === 'STRUCTURE' ? 'Scout building' : 'Send scouts';
-            btn.onclick     = () => sendScout(tileKey, tile.q, tile.r);
-        }
+        if (scouting) { btn.textContent = `Scouting… (${scouting.daysLeft}d)`; btn.disabled = true; }
+        else { btn.textContent = tile.type === 'STRUCTURE' ? 'Scout building' : 'Send scouts'; btn.onclick = () => sendScout(tileKey, tile.q, tile.r); }
         actEl.appendChild(btn);
     }
-
     body.appendChild(actEl);
 }
 
 function openPanel(key) {
     if (!GS.tiles[key]) return;
-    GS._fogPanelTile = null;
-    GS.selectedKey   = key;
+    GS._fogPanelTile = null; GS.selectedKey = key;
     populatePanel(key);
     document.getElementById('tile-panel').classList.add('open');
     GS.panelOpen = true;
 }
-
 function openFogPanel(key, q, r) {
-    GS._fogPanelTile = { q, r, _isFog: true };
-    GS.selectedKey   = key;
+    GS._fogPanelTile = { q, r, _isFog: true }; GS.selectedKey = key;
     populatePanel(key);
     document.getElementById('tile-panel').classList.add('open');
     GS.panelOpen = true;
 }
-
 function closePanel() {
     document.getElementById('tile-panel').classList.remove('open');
-    GS.panelOpen     = false;
-    GS.selectedKey   = null;
-    GS._fogPanelTile = null;
+    GS.panelOpen = false; GS.selectedKey = null; GS._fogPanelTile = null;
     if (window._scene) window._scene.clearHighlight();
 }
-
 document.getElementById('panel-close').addEventListener('click', closePanel);
 
 // ══════════════════════════════════════════════
@@ -771,9 +760,11 @@ class GameScene extends Phaser.Scene {
         GS.tiles = generateMap();
         GS.fog   = generateFog(GS.tiles);
 
-        this.bgGfx = this.add.graphics();
-        this.hlGfx = this.add.graphics();
-        this.fxGfx = this.add.graphics();
+        this.bgGfx   = this.add.graphics();
+        this.hlGfx   = this.add.graphics();
+        this.fxGfx   = this.add.graphics();
+        this.hiveGfx = this.add.graphics();
+        this.hiveGfx.setVisible(false);
 
         this.drawAllTiles();
         this.startHivePulse();
@@ -787,11 +778,9 @@ class GameScene extends Phaser.Scene {
         this._px = 0; this._py = 0; this._sx = 0; this._sy = 0;
 
         this.input.on('pointerdown', p => {
-            this._drag  = true;
-            this._moved = false;
+            this._drag = true; this._moved = false;
             this._px = p.x; this._py = p.y;
-            this._sx = this.cameras.main.scrollX;
-            this._sy = this.cameras.main.scrollY;
+            this._sx = this.cameras.main.scrollX; this._sy = this.cameras.main.scrollY;
         });
         this.input.on('pointermove', p => {
             if (!this._drag) return;
@@ -805,100 +794,176 @@ class GameScene extends Phaser.Scene {
         this.input.on('pointerup', p => {
             this._drag = false;
             if (this._moved) return;
+            if (GS.view === 'hive') { if (GS.panelOpen) closePanel(); return; }
             const wp  = this.cameras.main.getWorldPoint(p.x, p.y);
             const { q, r } = p2h(wp.x, wp.y);
             const key = hkey(q, r);
             if (GS.tiles[key]) {
-                this.drawHighlight(q, r);
-                openPanel(key);
+                this.drawHighlight(q, r); openPanel(key);
             } else if (GS.fog[key] && GS.fog[key].fogLevel === 1) {
                 const fog = GS.fog[key];
                 const adj = neighbors(fog.q, fog.r).some(([nq, nr]) => GS.tiles[hkey(nq, nr)]);
                 if (adj) { this.drawFogHighlight(fog.q, fog.r); openFogPanel(key, fog.q, fog.r); }
                 else if (GS.panelOpen) closePanel();
-            } else if (GS.panelOpen) {
-                closePanel();
-            }
+            } else if (GS.panelOpen) { closePanel(); }
         });
 
         updateHUD();
-
-        // Intro hint
         setTimeout(() => showToast('Tap your hive to assign nurses and guards'), 1500);
     }
 
+    // ── Map view ──
     drawAllTiles() {
         const g = this.bgGfx;
         g.clear();
 
-        // Fog
         Object.values(GS.fog).forEach(({ q, r, fogLevel }) => {
             const { x, y } = h2p(q, r);
             const alpha = fogLevel === 1 ? 0.55 : 0.3;
-            g.fillStyle(0x060d06, alpha);
-            g.lineStyle(1, 0x0c180c, alpha * 0.8);
-            this._hexPath(g, x, y);
-            g.fillPath(); g.strokePath();
-
-            // Scout mission glow on fog tiles
+            g.fillStyle(0x060d06, alpha); g.lineStyle(1, 0x0c180c, alpha * 0.8);
+            this._hexPath(g, x, y, HEX.SIZE); g.fillPath(); g.strokePath();
             if (fogLevel === 1 && GS.scoutMissions.find(m => m.key === hkey(q, r))) {
                 g.fillStyle(0xe09a18, 0.18);
-                this._hexPath(g, x, y);
-                g.fillPath();
+                this._hexPath(g, x, y, HEX.SIZE); g.fillPath();
             }
         });
 
-        // Territory tiles
         Object.values(GS.tiles).forEach(tile => {
             const { x, y } = h2p(tile.q, tile.r);
-            const def = TILES[tile.type];
-            const s   = tile.stage;
+            const def = TILES[tile.type], s = tile.stage;
+            g.fillStyle(def.fill[s], 1); g.lineStyle(1.5, def.rim[s], 0.9);
+            this._hexPath(g, x, y, HEX.SIZE); g.fillPath(); g.strokePath();
 
-            g.fillStyle(def.fill[s], 1);
-            g.lineStyle(1.5, def.rim[s], 0.9);
-            this._hexPath(g, x, y);
-            g.fillPath(); g.strokePath();
-
-            if (tile.type === 'WATER') {
-                g.fillStyle(0x2060a0, 0.7); g.fillCircle(x, y, 5);
-            } else if (tile.type === 'STRUCTURE') {
-                g.fillStyle(0x606060, 0.5); g.fillRect(x-5, y-5, 10, 10);
-            } else if (tile.type === 'DEAD_ZONE') {
+            if (tile.type === 'WATER')     { g.fillStyle(0x2060a0, 0.7); g.fillCircle(x, y, 5); }
+            else if (tile.type === 'STRUCTURE') { g.fillStyle(0x606060, 0.5); g.fillRect(x-5, y-5, 10, 10); }
+            else if (tile.type === 'DEAD_ZONE') {
                 g.lineStyle(1, 0x301808, 0.5);
-                g.lineBetween(x-5, y-5, x+5, y+5);
-                g.lineBetween(x+5, y-5, x-5, y+5);
+                g.lineBetween(x-5, y-5, x+5, y+5); g.lineBetween(x+5, y-5, x-5, y+5);
             } else if (def.forage > 0 && s >= 2) {
                 g.fillStyle(0x80c040, 0.4);
                 g.fillCircle(x + HEX.SIZE * 0.52, y - HEX.SIZE * 0.38, 3);
             }
         });
 
-        // Hive dot
         const hp = h2p(0, 0);
-        g.fillStyle(0xe09a18, 1);    g.fillCircle(hp.x, hp.y, 7);
+        g.fillStyle(0xe09a18, 1); g.fillCircle(hp.x, hp.y, 7);
         g.lineStyle(2, 0xf0bc40, 0.8); g.strokeCircle(hp.x, hp.y, 9);
-
-        // Forage radius ring
         g.lineStyle(1, 0xe09a18, 0.12);
         g.strokeCircle(hp.x, hp.y, HEX.SIZE * HEX.SQRT3 * GS.forageRadius * 1.02);
+    }
+
+    // ── Hive interior ──
+    drawHiveInterior() {
+        const g = this.hiveGfx;
+        g.clear();
+
+        const S = 30;   // smaller hex for interior view
+        const SQ3 = Math.sqrt(3);
+        function hip(q, r) {
+            return { x: S * (SQ3 * q + SQ3/2 * r), y: S * 1.5 * r };
+        }
+        const hexPath = (cx, cy) => {
+            const pts = [];
+            for (let i = 0; i < 6; i++) {
+                const a = Math.PI / 180 * (60 * i - 30);
+                pts.push(cx + (S - 1.5) * Math.cos(a), cy + (S - 1.5) * Math.sin(a));
+            }
+            g.beginPath(); g.moveTo(pts[0], pts[1]);
+            for (let i = 2; i < 12; i += 2) g.lineTo(pts[i], pts[i+1]);
+            g.closePath();
+        };
+
+        const nursesNeeded = Math.max(1, Math.ceil(GS.bees / 20));
+        const nursesOk     = GS.nurses >= nursesNeeded;
+        const HONEY_MAX    = 90;  // lbs; 18 outer cells × 5 lbs each
+
+        // Pre-compute ring-2 and ring-3 ordered cell lists for fill indexing
+        const ring2 = hexesInRadius(0,0,2).filter(([hq,hr]) => hdist(hq,hr,0,0) === 2);
+        const ring3 = hexesInRadius(0,0,3).filter(([hq,hr]) => hdist(hq,hr,0,0) === 3);
+
+        hexesInRadius(0, 0, 3).forEach(([q, r]) => {
+            const dist    = hdist(q, r, 0, 0);
+            const { x, y } = hip(q, r);
+            let fill, rim, dotColor = null, dotRadius = 0;
+
+            if (q === 0 && r === 0) {
+                // Queen chamber — always glowing
+                fill = 0xb07010; rim = 0xf0c040;
+                dotColor = 0xffe060; dotRadius = 4;
+
+            } else if (dist === 1) {
+                // Brood ring — 6 cells staggered through the cycle
+                const cellIdx = neighbors(0,0).findIndex(([nq,nr]) => nq===q && nr===r);
+                const age     = (GS.broodProgress + cellIdx * 3) % 21;
+                if (!nursesOk) {
+                    fill = 0x0e0a06; rim = 0x1a1008;
+                } else if (age <= 2) {
+                    fill = 0x1a1410; rim = 0x302820; dotColor = 0xe8e8d8; dotRadius = 3;
+                } else if (age <= 8) {
+                    fill = 0x2c2418; rim = 0x4a3e28; dotColor = 0xd0c088; dotRadius = 5;
+                } else {
+                    fill = 0x7a5030; rim = 0xa07040;
+                }
+
+            } else if (dist === 2) {
+                // Pollen/nectar ring — brood in summer, honey in fall/winter
+                if (GS.season === 'Winter' || GS.season === 'Fall') {
+                    const idx     = ring2.findIndex(([hq,hr]) => hq===q && hr===r);
+                    const filled  = idx < Math.floor(Math.min(1, GS.honey / HONEY_MAX) * 12);
+                    fill = filled ? 0xd08010 : 0x241808; rim = filled ? 0xe8a830 : 0x382412;
+                } else {
+                    const age = (GS.broodProgress + q * 7 + r * 5 + 8) % 21;
+                    if (!nursesOk) {
+                        fill = 0x0e0a06; rim = 0x1a1008;
+                    } else if (age <= 2) {
+                        fill = 0x1a1410; rim = 0x302820; dotColor = 0xc8c8b8; dotRadius = 2;
+                    } else if (age <= 8) {
+                        fill = 0x2a2216; rim = 0x483c26; dotColor = 0xb8a870; dotRadius = 4;
+                    } else {
+                        fill = 0x604020; rim = 0x806040;
+                    }
+                }
+
+            } else {
+                // Outer ring — honey storage, fills left-to-right as honey increases
+                const idx    = ring3.findIndex(([hq,hr]) => hq===q && hr===r);
+                const pct    = Math.min(1, GS.honey / HONEY_MAX);
+                const thresh = Math.floor(pct * 18);
+                if (idx < thresh) {
+                    fill = 0xe09a18; rim = 0xf0bc40;
+                } else if (idx === thresh && GS.honey > 0) {
+                    fill = 0x7a5010; rim = 0xb07820;
+                } else {
+                    fill = 0x1e1408; rim = 0x2e2010;
+                }
+            }
+
+            g.fillStyle(fill, 1);
+            g.lineStyle(1.5, rim, 0.9);
+            hexPath(x, y);
+            g.fillPath(); g.strokePath();
+
+            if (dotColor !== null) {
+                g.fillStyle(dotColor, 0.9);
+                g.fillCircle(x, y, dotRadius);
+            }
+        });
     }
 
     drawHighlight(q, r) {
         const { x, y } = h2p(q, r);
         this.hlGfx.clear();
         this.hlGfx.lineStyle(2, 0xe09a18, 0.7);
-        this._hexPath(this.hlGfx, x, y);
+        this._hexPath(this.hlGfx, x, y, HEX.SIZE);
         this.hlGfx.strokePath();
     }
-
     drawFogHighlight(q, r) {
         const { x, y } = h2p(q, r);
         this.hlGfx.clear();
         this.hlGfx.lineStyle(1.5, 0xe09a18, 0.35);
-        this._hexPath(this.hlGfx, x, y);
+        this._hexPath(this.hlGfx, x, y, HEX.SIZE);
         this.hlGfx.strokePath();
     }
-
     clearHighlight() { this.hlGfx.clear(); }
 
     startHivePulse() {
@@ -912,8 +977,8 @@ class GameScene extends Phaser.Scene {
         });
     }
 
-    _hexPath(g, cx, cy) {
-        const pts = corners(cx, cy, HEX.SIZE - 1.5);
+    _hexPath(g, cx, cy, size) {
+        const pts = corners(cx, cy, size - 1.5);
         g.beginPath(); g.moveTo(pts[0], pts[1]);
         for (let i = 2; i < 12; i += 2) g.lineTo(pts[i], pts[i+1]);
         g.closePath();
@@ -928,17 +993,16 @@ class GameScene extends Phaser.Scene {
     }
 
     refreshTiles() {
+        if (GS.view === 'hive') { this.drawHiveInterior(); return; }
         this.drawAllTiles();
         this.foragerTexts = this.foragerTexts || {};
         Object.values(this.foragerTexts).forEach(t => t.destroy());
         this.foragerTexts = {};
         Object.entries(GS.forageTiles).forEach(([key, count]) => {
-            const tile = GS.tiles[key];
-            if (!tile) return;
+            const tile = GS.tiles[key]; if (!tile) return;
             const { x, y } = h2p(tile.q, tile.r);
             const t = this.add.text(x, y + HEX.SIZE * 0.55, `${count}`, {
-                font: '11px Courier New', fill: '#e09a18',
-                stroke: '#080f08', strokeThickness: 3,
+                font: '11px Courier New', fill: '#e09a18', stroke: '#080f08', strokeThickness: 3,
             }).setOrigin(0.5, 0.5);
             this.foragerTexts[key] = t;
         });
@@ -962,9 +1026,8 @@ const game = new Phaser.Game({
 
 window.addEventListener('resize', () => game.scale.resize(window.innerWidth, window.innerHeight));
 
-if ('serviceWorker' in navigator) {
+if ('serviceWorker' in navigator)
     window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {}));
-}
 </script>
 </body>
 </html>
