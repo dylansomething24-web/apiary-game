@@ -12,15 +12,9 @@
     <meta name="theme-color" content="#080f08">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-        html, body {
-            width: 100%; height: 100%;
-            background: #080f08;
-            overflow: hidden;
-            touch-action: none;
-        }
+        html, body { width: 100%; height: 100%; background: #080f08; overflow: hidden; touch-action: none; }
         canvas { display: block; }
 
-        /* ── HUD ── */
         #hud {
             position: fixed; top: 0; left: 0; right: 0; z-index: 50;
             display: flex; justify-content: space-between; align-items: flex-start;
@@ -31,37 +25,38 @@
             padding-bottom: 20px;
         }
         .hud-stat { text-align: center; }
-        .hud-label {
-            font: 600 9px/1 'Courier New', monospace;
-            letter-spacing: 2px; text-transform: uppercase; color: #4a7040;
-        }
-        .hud-value {
-            font: 700 26px/1.1 'Courier New', monospace;
-            color: #e09a18; letter-spacing: 1px;
-            text-shadow: 0 0 12px rgba(224,154,24,0.4);
-        }
+        .hud-label { font: 600 9px/1 'Courier New', monospace; letter-spacing: 2px; text-transform: uppercase; color: #4a7040; }
+        .hud-value { font: 700 26px/1.1 'Courier New', monospace; color: #e09a18; letter-spacing: 1px; text-shadow: 0 0 12px rgba(224,154,24,0.4); }
         .hud-center { text-align: center; padding-top: 2px; }
-        .hud-season {
-            font: 400 14px/1 Georgia, serif;
-            color: #c8a860; letter-spacing: 1px;
-        }
-        .hud-day {
-            font: 400 11px/1.4 'Courier New', monospace;
-            color: #3a5a30; letter-spacing: 1px; margin-top: 2px;
-        }
+        .hud-season { font: 400 14px/1 Georgia, serif; color: #c8a860; letter-spacing: 1px; }
+        .hud-day    { font: 400 11px/1.4 'Courier New', monospace; color: #3a5a30; letter-spacing: 1px; margin-top: 2px; }
 
-        /* ── Phase Label ── */
         #phase-tag {
             position: fixed; top: 68px; left: 50%; transform: translateX(-50%);
             z-index: 49; pointer-events: none;
-            font: 400 10px/1 'Courier New', monospace;
-            letter-spacing: 3px; text-transform: uppercase;
-            color: #2a4a28; padding: 4px 14px;
-            border: 1px solid #1a3018; border-radius: 20px;
+            font: 400 10px/1 'Courier New', monospace; letter-spacing: 3px; text-transform: uppercase;
+            color: #2a4a28; padding: 4px 14px; border: 1px solid #1a3018; border-radius: 20px;
             background: rgba(8,15,8,0.7);
         }
 
-        /* ── Tile Info Panel ── */
+        /* Toast notifications */
+        #toast-container {
+            position: fixed; top: 88px; left: 50%; transform: translateX(-50%);
+            z-index: 100; display: flex; flex-direction: column; align-items: center;
+            gap: 8px; pointer-events: none; width: calc(100% - 40px); max-width: 320px;
+        }
+        .toast {
+            background: rgba(5,10,5,0.96); border: 1px solid #1a3a18; border-radius: 6px;
+            padding: 10px 16px; font: 400 12px/1.5 'Courier New', monospace; color: #70a060;
+            text-align: center; width: 100%;
+            animation: toast-in .25s ease, toast-out .35s ease 2.65s forwards;
+        }
+        .toast.warn   { color: #d09020; border-color: rgba(208,144,32,0.4); }
+        .toast.danger { color: #d04040; border-color: rgba(208,64,64,0.4); }
+        @keyframes toast-in  { from { opacity:0; transform:translateY(-8px); } to { opacity:1; } }
+        @keyframes toast-out { to   { opacity:0; transform:translateY(-8px); } }
+
+        /* Tile panel */
         #tile-panel {
             position: fixed; bottom: 0; left: 0; right: 0; z-index: 50;
             background: linear-gradient(to top, #050c05 80%, rgba(5,12,5,0.95));
@@ -71,62 +66,55 @@
             transition: transform 0.28s cubic-bezier(0.32, 0, 0.67, 0);
             will-change: transform;
         }
-        #tile-panel.open {
-            transform: translateY(0);
-            transition: transform 0.28s cubic-bezier(0.33, 1, 0.68, 1);
-        }
-        .panel-row-top {
-            display: flex; justify-content: space-between; align-items: flex-start;
-            margin-bottom: 8px;
-        }
-        .panel-tile-name {
-            font: 400 20px/1 Georgia, serif; color: #e09a18;
-        }
-        .panel-close {
-            background: none; border: none;
-            color: #2a4a28; font-size: 26px; line-height: 1;
-            cursor: pointer; padding: 0 2px; margin-top: -4px;
-        }
-        .panel-stage {
-            display: inline-block;
-            font: 600 10px/1 'Courier New', monospace;
-            letter-spacing: 2px; text-transform: uppercase;
-            padding: 4px 12px; border-radius: 20px; margin-bottom: 12px;
-        }
+        #tile-panel.open { transform: translateY(0); transition: transform 0.28s cubic-bezier(0.33, 1, 0.68, 1); }
+        .panel-row-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
+        .panel-tile-name { font: 400 20px/1 Georgia, serif; color: #e09a18; }
+        .panel-close { background: none; border: none; color: #2a4a28; font-size: 26px; line-height: 1; cursor: pointer; padding: 0 2px; margin-top: -4px; }
+        .panel-stage { display: inline-block; font: 600 10px/1 'Courier New', monospace; letter-spacing: 2px; text-transform: uppercase; padding: 4px 12px; border-radius: 20px; margin-bottom: 12px; }
         .stage-0 { background: rgba(40,20,10,.5); color: #7a5040; border: 1px solid #3a2010; }
         .stage-1 { background: rgba(60,50,15,.5); color: #a09030; border: 1px solid #5a4820; }
         .stage-2 { background: rgba(30,60,20,.5); color: #80b040; border: 1px solid #406030; }
         .stage-3 { background: rgba(20,80,30,.5); color: #50d870; border: 1px solid #308840; }
-        .panel-detail {
-            font: 400 13px/1.7 'Courier New', monospace;
-            color: #5a7a50; white-space: pre-line;
-            margin-bottom: 14px;
-        }
-        .panel-actions { display: flex; gap: 8px; }
+        .panel-detail { font: 400 13px/1.7 'Courier New', monospace; color: #5a7a50; white-space: pre-line; margin-bottom: 14px; }
+        .panel-actions { display: flex; gap: 8px; flex-wrap: wrap; }
         .action-btn {
-            flex: 1; padding: 11px 8px;
-            background: rgba(224,154,24,0.08);
-            border: 1px solid rgba(224,154,24,0.25);
-            border-radius: 6px; color: #c8a040;
-            font: 400 13px/1 Georgia, serif;
-            cursor: pointer; text-align: center;
-            transition: background .15s, border-color .15s;
+            flex: 1; padding: 11px 8px; min-width: 100px;
+            background: rgba(224,154,24,0.08); border: 1px solid rgba(224,154,24,0.25);
+            border-radius: 6px; color: #c8a040; font: 400 13px/1 Georgia, serif;
+            cursor: pointer; text-align: center; transition: background .15s, border-color .15s;
         }
         .action-btn:active { background: rgba(224,154,24,0.2); border-color: rgba(224,154,24,0.5); }
-        .action-btn.secondary {
-            background: rgba(60,90,40,0.12);
-            border-color: rgba(80,120,50,0.3);
-            color: #608050;
-        }
+        .action-btn.secondary { background: rgba(60,90,40,0.12); border-color: rgba(80,120,50,0.3); color: #608050; }
+        .action-btn:disabled { opacity: 0.4; cursor: default; }
 
-        /* ── Forage Radius Hint ── */
-        #range-hint {
-            position: fixed; bottom: 20px; right: 20px;
-            z-index: 49; pointer-events: none;
-            font: 400 10px/1.5 'Courier New', monospace;
-            color: #2a4a28; letter-spacing: 1px;
-            text-align: right;
+        /* Role assignment rows */
+        .role-section { margin-bottom: 12px; }
+        .role-row { display: flex; align-items: center; gap: 8px; padding: 7px 0; border-bottom: 1px solid #0e1a0e; }
+        .role-row:last-child { border-bottom: none; }
+        .role-label { font: 400 12px/1 'Courier New', monospace; color: #5a7a50; flex: 1; }
+        .role-note  { font: 400 10px/1 'Courier New', monospace; color: #2a4a28; }
+        .role-count { font: 700 15px/1 'Courier New', monospace; color: #c8a040; min-width: 26px; text-align: center; }
+        .role-count.warn { color: #d09020; }
+        .role-btn {
+            background: rgba(224,154,24,0.1); border: 1px solid rgba(224,154,24,0.25);
+            border-radius: 4px; color: #c8a040; font: 700 18px/1 monospace;
+            width: 32px; height: 32px; cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
         }
+        .role-btn:active { background: rgba(224,154,24,0.25); }
+
+        /* Bottom hints */
+        #bottom-hints {
+            position: fixed; bottom: 20px; left: 0; right: 0; z-index: 49;
+            display: flex; justify-content: space-between; padding: 0 20px;
+            pointer-events: none;
+        }
+        #speed-btn {
+            pointer-events: all; background: rgba(8,15,8,0.85); border: 1px solid #1a3018;
+            border-radius: 20px; padding: 7px 14px;
+            font: 400 12px/1 'Courier New', monospace; color: #3a6030; letter-spacing: 1px; cursor: pointer;
+        }
+        #range-hint { font: 400 10px/1.5 'Courier New', monospace; color: #2a4a28; letter-spacing: 1px; text-align: right; }
     </style>
 </head>
 <body>
@@ -137,8 +125,8 @@
         <div class="hud-value" id="hud-bees">15</div>
     </div>
     <div class="hud-center">
-        <div class="hud-season" id="hud-season">Early Spring</div>
-        <div class="hud-day" id="hud-day">Day 1 · Year 1</div>
+        <div class="hud-season" id="hud-season">Spring</div>
+        <div class="hud-day" id="hud-day">Day 1/25 · Year 1</div>
     </div>
     <div class="hud-stat">
         <div class="hud-label">Honey</div>
@@ -147,64 +135,48 @@
 </div>
 
 <div id="phase-tag">Phase I — Colony</div>
+<div id="toast-container"></div>
 
 <div id="tile-panel">
     <div class="panel-row-top">
         <div class="panel-tile-name" id="panel-name">—</div>
         <button class="panel-close" id="panel-close">×</button>
     </div>
-    <div class="panel-stage stage-1" id="panel-stage">Sparse</div>
-    <div class="panel-detail" id="panel-detail"></div>
-    <div class="panel-actions" id="panel-actions"></div>
+    <div id="panel-body"></div>
 </div>
 
-<div id="range-hint">Forage radius: 1 tile</div>
+<div id="bottom-hints">
+    <button id="speed-btn" onclick="cycleSpeed()">1×</button>
+    <div id="range-hint">—</div>
+</div>
 
 <script src="phaser.min.js"></script>
 <script>
 'use strict';
 
-// ═══════════════════════════════════════════════════════════
-// HEX CONSTANTS & MATH  (pointy-top, axial coords)
-// ═══════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════
+// HEX MATH  (pointy-top axial)
+// ══════════════════════════════════════════════
 
-const HEX = {
-    SIZE:  38,
-    SQRT3: Math.sqrt(3),
-};
+const HEX = { SIZE: 38, SQRT3: Math.sqrt(3) };
 
-function h2p(q, r) {   // hex → pixel (center)
-    return {
-        x: HEX.SIZE * (HEX.SQRT3 * q + HEX.SQRT3 / 2 * r),
-        y: HEX.SIZE * 1.5 * r,
-    };
+function h2p(q, r) {
+    return { x: HEX.SIZE * (HEX.SQRT3 * q + HEX.SQRT3 / 2 * r), y: HEX.SIZE * 1.5 * r };
 }
-
-function p2h(x, y) {   // pixel → hex (rounded)
-    const q = (x * HEX.SQRT3 / 3 - y / 3) / HEX.SIZE;
-    const r = y * 2 / 3 / HEX.SIZE;
-    return hround(q, r);
+function p2h(x, y) {
+    return hround((x * HEX.SQRT3 / 3 - y / 3) / HEX.SIZE, y * 2 / 3 / HEX.SIZE);
 }
-
 function hround(fq, fr) {
     const fs = -fq - fr;
     let q = Math.round(fq), r = Math.round(fr), s = Math.round(fs);
-    const dq = Math.abs(q - fq), dr = Math.abs(r - fr), ds = Math.abs(s - fs);
+    const dq = Math.abs(q-fq), dr = Math.abs(r-fr), ds = Math.abs(s-fs);
     if (dq > dr && dq > ds) q = -r - s;
     else if (dr > ds)        r = -q - s;
     return { q, r };
 }
-
-function hkey(q, r) { return `${q},${r}`; }
-
-function neighbors(q, r) {
-    return [[q+1,r],[q+1,r-1],[q,r-1],[q-1,r],[q-1,r+1],[q,r+1]];
-}
-
-function hdist(q1, r1, q2, r2) {
-    return (Math.abs(q1-q2) + Math.abs(q1+r1-q2-r2) + Math.abs(r1-r2)) / 2;
-}
-
+function hkey(q, r)      { return `${q},${r}`; }
+function neighbors(q, r) { return [[q+1,r],[q+1,r-1],[q,r-1],[q-1,r],[q-1,r+1],[q,r+1]]; }
+function hdist(q1,r1,q2,r2) { return (Math.abs(q1-q2)+Math.abs(q1+r1-q2-r2)+Math.abs(r1-r2))/2; }
 function hexesInRadius(cq, cr, rad) {
     const res = [];
     for (let dq = -rad; dq <= rad; dq++)
@@ -212,8 +184,6 @@ function hexesInRadius(cq, cr, rad) {
             res.push([cq+dq, cr+dr]);
     return res;
 }
-
-// Pointy-top corners (world coords)
 function corners(cx, cy, r) {
     const pts = [];
     for (let i = 0; i < 6; i++) {
@@ -223,11 +193,10 @@ function corners(cx, cy, r) {
     return pts;
 }
 
-// ═══════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════
 // TILE DEFINITIONS
-// ═══════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════
 
-// Each stage: [dead_color, sparse_color, recovering_color, thriving_color]  (fill, rim)
 const TILES = {
     WILDFLOWER: {
         name: 'Wildflower Meadow', forage: 3,
@@ -265,79 +234,62 @@ const TILES = {
         rim:  [0x2a2a24, 0x2a2a24, 0x363630, 0x404040],
     },
     HIVE_BOX: {
-        name: 'Open Hive Box', forage: 0,
+        name: 'Your Hive', forage: 0,
         fill: [0x2a1c08, 0x2a1c08, 0x2a1c08, 0x2a1c08],
-        rim:  [0xe09a18, 0xe09a18, 0xe09a18, 0xe09a18],  // always amber
+        rim:  [0xe09a18, 0xe09a18, 0xe09a18, 0xe09a18],
     },
 };
 
-const STAGE_NAMES  = ['Dead', 'Sparse', 'Recovering', 'Thriving'];
+const STAGE_NAMES = ['Dead', 'Sparse', 'Recovering', 'Thriving'];
+const SEASONS     = ['Spring', 'Summer', 'Fall', 'Winter'];
+const SEASON_DAYS = [25, 35, 25, 15];
 
-// ═══════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════
 // MAP GENERATION
-// ═══════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════
 
 function generateMap() {
     const tiles = {};
-
-    // Starting territory: all hexes within radius 3 → 37 tiles
     const allHexes = hexesInRadius(0, 0, 3);
-
-    // Tile type distribution pool (36 non-hive tiles)
     const pool = [
-        ...Array(13).fill('WILDFLOWER'),
-        ...Array(7).fill('FOREST'),
-        ...Array(4).fill('CLOVER'),
-        ...Array(3).fill('SUNFLOWER'),
-        ...Array(5).fill('DEAD_ZONE'),
-        ...Array(2).fill('WATER'),
+        ...Array(13).fill('WILDFLOWER'), ...Array(7).fill('FOREST'),
+        ...Array(4).fill('CLOVER'),      ...Array(3).fill('SUNFLOWER'),
+        ...Array(5).fill('DEAD_ZONE'),   ...Array(2).fill('WATER'),
         ...Array(1).fill('STRUCTURE'),
     ];
-    // shuffle
     for (let i = pool.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
         [pool[i], pool[j]] = [pool[j], pool[i]];
     }
-
     let poolIdx = 0;
     allHexes.forEach(([q, r]) => {
-        const key = hkey(q, r);
+        const key  = hkey(q, r);
         const dist = hdist(q, r, 0, 0);
         let type, stage;
-
         if (q === 0 && r === 0) {
-            type = 'HIVE_BOX';
-            stage = 3;
+            type = 'HIVE_BOX'; stage = 3;
         } else {
             type = pool[poolIdx++ % pool.length];
-            // Water is always thriving; dead zones start dead;
-            // near-hive tiles start recovering; outer tiles sparse
-            if (type === 'WATER')         stage = 3;
+            if      (type === 'WATER')     stage = 3;
             else if (type === 'DEAD_ZONE') stage = 0;
             else if (dist <= 1)            stage = 2;
             else                           stage = 1;
         }
-
         tiles[key] = { q, r, type, stage, territory: 'home', foragers: 0 };
     });
-
     return tiles;
 }
 
 function generateFog(tiles) {
-    const fog = {};
+    const fog   = {};
     const known = new Set(Object.keys(tiles));
-
-    // Ring 1 (adjacent to territory)
     known.forEach(k => {
         const { q, r } = tiles[k];
         neighbors(q, r).forEach(([nq, nr]) => {
             const nk = hkey(nq, nr);
-            if (!known.has(nk) && !fog[nk])
-                fog[nk] = { q: nq, r: nr, fogLevel: 1 };
+            if (!known.has(nk) && !fog[nk]) fog[nk] = { q: nq, r: nr, fogLevel: 1 };
         });
     });
-    // Ring 2
     const ring1 = new Set(Object.keys(fog));
     ring1.forEach(k => {
         const { q, r } = fog[k];
@@ -350,246 +302,496 @@ function generateFog(tiles) {
     return fog;
 }
 
-// ═══════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════
 // GAME STATE
-// ═══════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════
 
 const GS = {
-    bees: 15, honey: 0, nectar: 0,
+    bees: 15, honey: 0,
+    nurses: 2,          // tending brood
+    guards: 0,          // defending hive
     season: 'Spring', day: 1, year: 1,
     forageRadius: 1,
-    forageTiles: {},       // key → forager count
-    assignedBees: 0,       // total bees currently foraging
-    broodProgress: 0,      // 0-21; new bee every 21 days
+    forageTiles: {},    // key → forager count
+    assignedBees: 0,    // total foraging
+    broodProgress: 0,
+    scoutMissions: [],  // [{key, q, r, daysLeft}]
     tiles: {}, fog: {},
-    selectedKey: null,
-    panelOpen: false,
-    speed: 1,              // 0.5 = slow, 1 = normal, 2 = fast
-    dayMs: 3000,           // real ms per in-game day at speed 1
-    _elapsed: 0,
-    _honeyFrac: 0,
+    selectedKey: null, panelOpen: false,
+    _fogPanelTile: null,
+    speed: 1, dayMs: 3000, _elapsed: 0, _honeyFrac: 0,
+    _warnedLowHoney: false, _warnedWinter: false,
+    _nextThreat: 40,
 };
 
-const SEASONS = ['Spring', 'Summer', 'Fall', 'Winter'];
-const SEASON_DAYS = [25, 35, 25, 15];  // days per season (total 100/year)
+// ══════════════════════════════════════════════
+// NOTIFICATIONS
+// ══════════════════════════════════════════════
 
-// ═══════════════════════════════════════════════════════════
-// HTML UI
-// ═══════════════════════════════════════════════════════════
-
-function updateHUD() {
-    const free = GS.bees - GS.assignedBees;
-    document.getElementById('hud-bees').textContent   = `${GS.bees}`;
-    document.getElementById('hud-honey').textContent  = `${GS.honey}`;
-    document.getElementById('hud-season').textContent = GS.season;
-    document.getElementById('hud-day').textContent    = `Day ${GS.day} · Year ${GS.year}`;
-    document.getElementById('range-hint').textContent =
-        `${free} free · ${GS.assignedBees} foraging`;
+function showToast(msg, type = '') {
+    const el = document.createElement('div');
+    el.className = 'toast' + (type ? ' ' + type : '');
+    el.textContent = msg;
+    document.getElementById('toast-container').appendChild(el);
+    setTimeout(() => el.remove(), 3000);
 }
 
+// ══════════════════════════════════════════════
+// HUD
+// ══════════════════════════════════════════════
+
 function seasonFromDay(day) {
-    const dayOfYear = ((day - 1) % 100);
+    const doy = (day - 1) % 100;
     let acc = 0;
     for (let i = 0; i < SEASONS.length; i++) {
         acc += SEASON_DAYS[i];
-        if (dayOfYear < acc) return SEASONS[i];
+        if (doy < acc) return SEASONS[i];
     }
     return SEASONS[3];
 }
+
+function seasonProgress() {
+    const doy = (GS.day - 1) % 100;
+    let acc = 0;
+    for (let i = 0; i < SEASONS.length; i++) {
+        if (doy < acc + SEASON_DAYS[i])
+            return `Day ${doy - acc + 1}/${SEASON_DAYS[i]}`;
+        acc += SEASON_DAYS[i];
+    }
+    return '';
+}
+
+function updateHUD() {
+    const free = Math.max(0, GS.bees - GS.assignedBees - GS.nurses - GS.guards);
+    document.getElementById('hud-bees').textContent   = GS.bees;
+    document.getElementById('hud-honey').textContent  = GS.honey;
+    document.getElementById('hud-season').textContent = GS.season;
+    document.getElementById('hud-day').textContent    = `${seasonProgress()} · Year ${GS.year}`;
+    document.getElementById('range-hint').textContent = `${free} free · ${GS.assignedBees} foraging`;
+}
+
+// ══════════════════════════════════════════════
+// GAME LOOP
+// ══════════════════════════════════════════════
 
 function advanceDay() {
     GS.day++;
     GS.season = seasonFromDay(GS.day);
 
-    // New year
-    const dayOfYear = (GS.day - 1) % 100;
-    if (dayOfYear === 0 && GS.day > 1) GS.year++;
+    const doy = (GS.day - 1) % 100;
+    if (doy === 0 && GS.day > 1) {
+        GS.year++;
+        GS._warnedWinter = false;
+        GS._warnedLowHoney = false;
+    }
 
-    // Honey collection from foragers
-    let nectarGained = 0;
+    // Honey from foragers
+    let gained = 0;
     Object.entries(GS.forageTiles).forEach(([key, count]) => {
         const tile = GS.tiles[key];
         if (!tile || tile.stage === 0) return;
         const def = TILES[tile.type];
         if (def && def.forage > 0) {
-            const efficiency = GS.season === 'Winter' ? 0 : (GS.season === 'Fall' ? 0.6 : 1.0);
-            nectarGained += def.forage * count * 0.4 * efficiency;
+            const eff = GS.season === 'Winter' ? 0 : GS.season === 'Fall' ? 0.6 : 1.0;
+            gained += def.forage * count * 0.08 * eff;
         }
     });
 
-    // Winter: colony consumes honey (survival mechanic)
-    let consumed = 0;
-    if (GS.season === 'Winter') {
-        consumed = GS.bees * 0.05;  // 0.05 lbs per bee per day
-    }
+    // Winter consumption
+    const consumed = GS.season === 'Winter' ? GS.bees * 0.08 : 0;
 
-    GS._honeyFrac += nectarGained - consumed;
+    GS._honeyFrac += gained - consumed;
     if (GS._honeyFrac >= 1) {
-        const gained = Math.floor(GS._honeyFrac);
-        GS.honey += gained;
-        GS._honeyFrac -= gained;
-    } else if (GS._honeyFrac < 0 && GS.honey > 0) {
-        const lost = Math.ceil(-GS._honeyFrac);
-        GS.honey = Math.max(0, GS.honey - lost);
-        GS._honeyFrac += lost;
-    }
-
-    // Brood cycle: 1 new worker bee every 21 days
-    GS.broodProgress++;
-    if (GS.broodProgress >= 21) {
-        GS.broodProgress = 0;
-        GS.bees += Math.max(1, Math.floor(GS.bees * 0.05));  // colony grows ~5% per cycle
-    }
-
-    // Tile healing: random slow tick to show tiles recovering
-    if (GS.day % 5 === 0) {
-        const keys = Object.keys(GS.tiles);
-        const k = keys[Math.floor(Math.random() * keys.length)];
-        const t = GS.tiles[k];
-        if (t && t.type !== 'DEAD_ZONE' && t.type !== 'WATER' && t.stage < 3) {
-            // Only heal if foragers have visited nearby tiles
-            const dist = hdist(t.q, t.r, 0, 0);
-            if (dist <= GS.forageRadius) t.stage = Math.min(3, t.stage + 1);
+        const n = Math.floor(GS._honeyFrac);
+        GS.honey += n;
+        GS._honeyFrac -= n;
+    } else if (GS._honeyFrac < 0) {
+        if (GS.honey > 0) {
+            const n = Math.min(GS.honey, Math.ceil(-GS._honeyFrac));
+            GS.honey -= n;
+            GS._honeyFrac += n;
+        } else {
+            GS._honeyFrac = 0;
         }
     }
 
-    // Forage radius grows with colony size
+    // Winter starvation — bees die without honey
+    if (GS.season === 'Winter' && GS.honey === 0) {
+        const lost = Math.max(1, Math.floor(GS.bees * 0.04));
+        GS.bees = Math.max(3, GS.bees - lost);
+        _clampRoles();
+        if (GS.day % 3 === 0) showToast(`${lost} bees lost to cold`, 'danger');
+    }
+
+    // Brood cycle (requires nurses)
+    const nursesNeeded = Math.max(1, Math.ceil(GS.bees / 20));
+    GS.broodProgress++;
+    if (GS.broodProgress >= 21) {
+        GS.broodProgress = 0;
+        if (GS.season !== 'Winter') {
+            if (GS.nurses >= nursesNeeded) {
+                GS.bees += Math.max(1, Math.floor(GS.bees * 0.04));
+            } else {
+                showToast(`Brood failing — need ${nursesNeeded} nurses (have ${GS.nurses})`, 'warn');
+            }
+        }
+    }
+
+    // Forage radius
     if (GS.bees >= 100) GS.forageRadius = 2;
     if (GS.bees >= 400) GS.forageRadius = 3;
+
+    // Tile healing
+    if (GS.day % 5 === 0 && GS.season !== 'Winter') {
+        const keys = Object.keys(GS.tiles);
+        const t = GS.tiles[keys[Math.floor(Math.random() * keys.length)]];
+        if (t && t.type !== 'DEAD_ZONE' && t.type !== 'WATER' && t.stage < 3
+                && hdist(t.q, t.r, 0, 0) <= GS.forageRadius)
+            t.stage = Math.min(3, t.stage + 1);
+    }
+
+    // Scout missions
+    GS.scoutMissions = GS.scoutMissions.filter(m => {
+        m.daysLeft--;
+        if (m.daysLeft <= 0) { revealScoutedTile(m.key, m.q, m.r); return false; }
+        return true;
+    });
+
+    // Threat events
+    if (GS.day >= GS._nextThreat && GS.season !== 'Winter') {
+        GS._nextThreat = GS.day + 25 + Math.floor(Math.random() * 20);
+        if (Math.random() < 0.55) triggerThreat();
+    }
+
+    // Warnings
+    if (!GS._warnedWinter && doy === 78) {  // 7 days before winter
+        GS._warnedWinter = true;
+        const need = Math.ceil(GS.bees * 0.08 * 15);
+        showToast(
+            `Winter in 7 days — need ~${need} lbs (have ${GS.honey})`,
+            GS.honey < need ? 'warn' : ''
+        );
+    }
+    if (!GS._warnedLowHoney && GS.honey < 8 && GS.honey > 0 && GS.season !== 'Winter') {
+        GS._warnedLowHoney = true;
+        showToast('Honey critically low', 'warn');
+    }
+    if (GS.honey >= 15) GS._warnedLowHoney = false;
 
     updateHUD();
     if (window._scene) window._scene.refreshTiles();
 }
 
-function openPanel(key) {
-    const tile = GS.tiles[key];
-    if (!tile) return;
-    const def = TILES[tile.type];
-    if (!def) return;
+function _clampRoles() {
+    GS.nurses = Math.min(GS.nurses, Math.floor(GS.bees * 0.5));
+    GS.guards = Math.min(GS.guards, Math.floor(GS.bees * 0.3));
+    GS.assignedBees = Math.min(GS.assignedBees, GS.bees - GS.nurses - GS.guards);
+}
 
+// ══════════════════════════════════════════════
+// THREATS
+// ══════════════════════════════════════════════
+
+function triggerThreat() {
+    const roll = Math.random();
+    if (roll < 0.4) {
+        if (GS.guards >= 3) {
+            showToast('Wasp scouts turned back — guards held');
+        } else {
+            const stolen = Math.min(GS.honey, 3 + Math.floor(Math.random() * 6));
+            GS.honey -= stolen;
+            showToast(`Wasp raid — ${stolen} lbs honey stolen`, 'danger');
+        }
+    } else if (roll < 0.65) {
+        const lost = Math.max(1, Math.floor(GS.bees * 0.08));
+        GS.bees = Math.max(3, GS.bees - lost);
+        _clampRoles();
+        showToast(`Mite infestation — ${lost} bees lost`, 'danger');
+    } else if (roll < 0.85) {
+        showToast('A wild swarm was spotted nearby — scout the fog');
+    } else {
+        const bonus = 2 + Math.floor(Math.random() * 4);
+        GS.honey += bonus;
+        showToast(`Late bloom — foragers found ${bonus} extra lbs`);
+    }
+    updateHUD();
+}
+
+// ══════════════════════════════════════════════
+// SCOUTS
+// ══════════════════════════════════════════════
+
+function sendScout(key, q, r) {
+    if (GS.scoutMissions.find(m => m.key === key)) {
+        showToast('Already scouting this area'); return;
+    }
+    if (GS.scoutMissions.length >= 3) {
+        showToast('Already running 3 scout missions', 'warn'); return;
+    }
+    GS.scoutMissions.push({ key, q, r, daysLeft: 3 });
+    showToast('Scouts dispatched — returns in 3 days');
+    closePanel();
+    if (window._scene) window._scene.refreshTiles();
+}
+
+function revealScoutedTile(key, q, r) {
+    delete GS.fog[key];
+    const pool = ['WILDFLOWER','WILDFLOWER','WILDFLOWER','FOREST','FOREST','CLOVER','SUNFLOWER','DEAD_ZONE'];
+    const type  = pool[Math.floor(Math.random() * pool.length)];
+    GS.tiles[key] = { q, r, type, stage: type === 'DEAD_ZONE' ? 0 : 1, territory: 'scouted', foragers: 0 };
+    showToast(`Scouts found: ${TILES[type].name}`, type === 'DEAD_ZONE' ? 'warn' : '');
+    // Expand fog ring
+    const known = new Set(Object.keys(GS.tiles));
+    neighbors(q, r).forEach(([nq, nr]) => {
+        const nk = hkey(nq, nr);
+        if (!known.has(nk) && !GS.fog[nk]) GS.fog[nk] = { q: nq, r: nr, fogLevel: 1 };
+    });
+}
+
+// ══════════════════════════════════════════════
+// ROLE ASSIGNMENT
+// ══════════════════════════════════════════════
+
+function changeRole(role, delta) {
+    const free = GS.bees - GS.assignedBees - GS.nurses - GS.guards;
+    if (delta > 0 && free <= 0) return;
+    if (role === 'nurses') {
+        if (delta < 0 && GS.nurses <= 0) return;
+        GS.nurses = Math.max(0, GS.nurses + delta);
+    } else {
+        if (delta < 0 && GS.guards <= 0) return;
+        GS.guards = Math.max(0, GS.guards + delta);
+    }
+    updateHUD();
+    populatePanel(GS.selectedKey);
+}
+
+// ══════════════════════════════════════════════
+// SPEED
+// ══════════════════════════════════════════════
+
+function cycleSpeed() {
+    const steps  = [0.5, 1, 2, 4];
+    const labels = ['½×', '1×', '2×', '4×'];
+    const idx  = steps.indexOf(GS.speed);
+    const next = (idx + 1) % steps.length;
+    GS.speed = steps[next];
+    document.getElementById('speed-btn').textContent = labels[next];
+}
+
+// ══════════════════════════════════════════════
+// PANEL SYSTEM
+// ══════════════════════════════════════════════
+
+function populatePanel(key) {
+    const tile = GS.tiles[key] || GS._fogPanelTile;
+    if (!tile) return;
+
+    const body = document.getElementById('panel-body');
+    body.innerHTML = '';
+
+    // ── Fog tile ──
+    if (tile._isFog) {
+        document.getElementById('panel-name').textContent = 'Unknown Territory';
+        const scouting = GS.scoutMissions.find(m => m.key === key);
+        if (scouting) {
+            body.innerHTML = `
+                <div class="panel-stage stage-0">Scouting…</div>
+                <div class="panel-detail">Scouts return in ${scouting.daysLeft} day${scouting.daysLeft !== 1 ? 's' : ''}.</div>`;
+        } else {
+            body.innerHTML = `
+                <div class="panel-stage stage-0">Unexplored</div>
+                <div class="panel-detail">Unknown land beyond your territory.
+Scouts will map what lives here.</div>
+                <div class="panel-actions">
+                    <button class="action-btn secondary" onclick="sendScout('${key}',${tile.q},${tile.r})">Send scouts</button>
+                </div>`;
+        }
+        return;
+    }
+
+    const def = TILES[tile.type];
     document.getElementById('panel-name').textContent = def.name;
 
-    const stageEl = document.getElementById('panel-stage');
-    stageEl.textContent  = STAGE_NAMES[tile.stage];
-    stageEl.className    = `panel-stage stage-${tile.stage}`;
+    // ── Hive ──
+    if (tile.type === 'HIVE_BOX') {
+        const nursesNeeded = Math.max(1, Math.ceil(GS.bees / 20));
+        const free         = Math.max(0, GS.bees - GS.assignedBees - GS.nurses - GS.guards);
+        const winterNeed   = Math.ceil(GS.bees * 0.08 * 15);
+        const scoutLine    = GS.scoutMissions.length > 0
+            ? `\n${GS.scoutMissions.length} scout mission${GS.scoutMissions.length > 1 ? 's' : ''} active`
+            : '';
+        const nursesOk = GS.nurses >= nursesNeeded;
 
-    // Detail text
+        body.innerHTML = `
+            <div class="panel-detail">${GS.bees} bees · ${GS.honey} lbs honey
+Est. winter need: ~${winterNeed} lbs${scoutLine}</div>
+            <div class="role-section">
+                <div class="role-row">
+                    <span class="role-label">Nurses</span>
+                    <span class="role-note">need ${nursesNeeded}</span>
+                    <button class="role-btn" onclick="changeRole('nurses',-1)">−</button>
+                    <span class="role-count ${nursesOk ? '' : 'warn'}">${GS.nurses}</span>
+                    <button class="role-btn" onclick="changeRole('nurses',+1)">+</button>
+                </div>
+                <div class="role-row">
+                    <span class="role-label">Guards</span>
+                    <span class="role-note">wasps need 3+</span>
+                    <button class="role-btn" onclick="changeRole('guards',-1)">−</button>
+                    <span class="role-count ${GS.guards >= 3 ? '' : 'warn'}">${GS.guards}</span>
+                    <button class="role-btn" onclick="changeRole('guards',+1)">+</button>
+                </div>
+                <div class="role-row">
+                    <span class="role-label">Foraging</span>
+                    <span class="role-note"></span>
+                    <span style="width:32px"></span>
+                    <span class="role-count">${GS.assignedBees}</span>
+                    <span style="width:32px"></span>
+                </div>
+                <div class="role-row">
+                    <span class="role-label">Free</span>
+                    <span class="role-note"></span>
+                    <span style="width:32px"></span>
+                    <span class="role-count ${free < 3 ? 'warn' : ''}">${free}</span>
+                    <span style="width:32px"></span>
+                </div>
+            </div>`;
+        return;
+    }
+
+    // ── Regular tile ──
+    const stageEl = document.createElement('div');
+    stageEl.className   = `panel-stage stage-${tile.stage}`;
+    stageEl.textContent = STAGE_NAMES[tile.stage];
+    body.appendChild(stageEl);
+
     const dist = hdist(tile.q, tile.r, 0, 0);
     let detail = '';
     if (def.forage > 0) {
-        const yieldLabel = ['', 'Low', 'Moderate', 'Good', 'High'][def.forage];
-        detail += `Forage yield: ${yieldLabel}\n`;
-        detail += `Distance from hive: ${dist} tile${dist !== 1 ? 's' : ''}\n`;
-        if (dist > GS.forageRadius) detail += `⚠ Outside current forage radius (${GS.forageRadius})`;
+        detail = `Forage yield: ${ ['','Low','Moderate','Good','High'][def.forage] }
+Distance: ${dist} tile${dist !== 1 ? 's' : ''}`;
+        if (dist > GS.forageRadius) detail += `\n⚠ Outside forage radius (${GS.forageRadius})`;
     } else if (tile.type === 'DEAD_ZONE') {
-        detail = `Barren land — no nectar.\nBees can restore this through pollination\nof surrounding tiles.`;
+        detail = 'Barren land — no nectar.\nPollination from nearby tiles\nslowly restores this ground.';
     } else if (tile.type === 'WATER') {
-        detail = `Clean water source.\nSupports colony health and cooling.\nBees drink here automatically.`;
-    } else if (tile.type === 'HIVE_BOX') {
-        detail = `Your colony.\n${GS.bees} bees · ${GS.honey} lbs honey\nForage radius: ${GS.forageRadius} tile`;
+        detail = 'Clean water.\nSupports colony health.\nBees drink here automatically.';
     } else if (tile.type === 'STRUCTURE') {
-        detail = `An abandoned building.\nScouts could investigate for a\nnatural wild hive site inside.`;
+        detail = 'Abandoned structure.\nScouts could find a wild hive\nor useful resources inside.';
     }
-    document.getElementById('panel-detail').textContent = detail;
 
-    // Action buttons
-    const actionsEl = document.getElementById('panel-actions');
-    actionsEl.innerHTML = '';
+    const detailEl = document.createElement('div');
+    detailEl.className   = 'panel-detail';
+    detailEl.textContent = detail;
+    body.appendChild(detailEl);
+
+    const actEl = document.createElement('div');
+    actEl.className = 'panel-actions';
     const tileKey = hkey(tile.q, tile.r);
 
     if (def.forage > 0 && dist <= GS.forageRadius && tile.stage > 0) {
-        const alreadyHere = GS.forageTiles[tileKey] || 0;
-        if (alreadyHere > 0) {
-            // Recall button
-            const btn = document.createElement('button');
-            btn.className = 'action-btn';
-            btn.textContent = `Recall (${alreadyHere} foraging)`;
+        const already = GS.forageTiles[tileKey] || 0;
+        const btn = document.createElement('button');
+        btn.className = 'action-btn';
+        if (already > 0) {
+            btn.textContent = `Recall (${already} foraging)`;
             btn.onclick = () => {
-                GS.assignedBees -= alreadyHere;
+                GS.assignedBees -= already;
                 delete GS.forageTiles[tileKey];
                 closePanel();
                 if (window._scene) window._scene.refreshTiles();
             };
-            actionsEl.appendChild(btn);
         } else {
-            const freeBees = GS.bees - GS.assignedBees;
-            const btn = document.createElement('button');
-            btn.className = 'action-btn';
-            btn.textContent = freeBees > 0 ? 'Send foragers' : 'No free bees';
-            btn.disabled = freeBees === 0;
+            const free = GS.bees - GS.assignedBees - GS.nurses - GS.guards;
+            btn.textContent = free > 0 ? 'Send foragers' : 'No free bees';
+            btn.disabled    = free <= 0;
             btn.onclick = () => {
-                if (freeBees <= 0) return;
-                const send = Math.max(1, Math.min(5, Math.floor(freeBees * 0.3)));
-                GS.forageTiles[tileKey] = send;
-                GS.assignedBees += send;
+                const n = Math.max(1, Math.min(5, Math.floor(free * 0.3)));
+                GS.forageTiles[tileKey] = n;
+                GS.assignedBees += n;
                 closePanel();
                 if (window._scene) window._scene.refreshTiles();
             };
-            actionsEl.appendChild(btn);
         }
+        actEl.appendChild(btn);
     }
 
     if (dist > GS.forageRadius || tile.type === 'STRUCTURE') {
+        const scouting = GS.scoutMissions.find(m => m.key === tileKey);
         const btn = document.createElement('button');
         btn.className = 'action-btn secondary';
-        btn.textContent = tile.type === 'STRUCTURE' ? 'Scout building' : 'Send scouts';
-        btn.onclick = () => { closePanel(); };
-        actionsEl.appendChild(btn);
+        if (scouting) {
+            btn.textContent = `Scouting… (${scouting.daysLeft}d)`;
+            btn.disabled    = true;
+        } else {
+            btn.textContent = tile.type === 'STRUCTURE' ? 'Scout building' : 'Send scouts';
+            btn.onclick     = () => sendScout(tileKey, tile.q, tile.r);
+        }
+        actEl.appendChild(btn);
     }
 
+    body.appendChild(actEl);
+}
+
+function openPanel(key) {
+    if (!GS.tiles[key]) return;
+    GS._fogPanelTile = null;
+    GS.selectedKey   = key;
+    populatePanel(key);
     document.getElementById('tile-panel').classList.add('open');
     GS.panelOpen = true;
-    GS.selectedKey = key;
+}
+
+function openFogPanel(key, q, r) {
+    GS._fogPanelTile = { q, r, _isFog: true };
+    GS.selectedKey   = key;
+    populatePanel(key);
+    document.getElementById('tile-panel').classList.add('open');
+    GS.panelOpen = true;
 }
 
 function closePanel() {
     document.getElementById('tile-panel').classList.remove('open');
-    GS.panelOpen  = false;
-    GS.selectedKey = null;
+    GS.panelOpen     = false;
+    GS.selectedKey   = null;
+    GS._fogPanelTile = null;
     if (window._scene) window._scene.clearHighlight();
 }
 
 document.getElementById('panel-close').addEventListener('click', closePanel);
 
-// ═══════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════
 // PHASER SCENE
-// ═══════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════
 
 class GameScene extends Phaser.Scene {
     constructor() { super('GameScene'); }
 
     create() {
         window._scene = this;
-
         GS.tiles = generateMap();
         GS.fog   = generateFog(GS.tiles);
 
-        // All geometry drawn on one Graphics, plus a highlight layer
-        this.bgGfx   = this.add.graphics();
-        this.hlGfx   = this.add.graphics();
-        this.fxGfx   = this.add.graphics();  // pulse
+        this.bgGfx = this.add.graphics();
+        this.hlGfx = this.add.graphics();
+        this.fxGfx = this.add.graphics();
 
         this.drawAllTiles();
         this.startHivePulse();
 
-        // Center camera on hive (0,0)
         this.cameras.main.setScroll(
             -this.cameras.main.width  / 2,
             -this.cameras.main.height / 2,
         );
 
-        // Input
-        this._drag = false;
-        this._px = 0; this._py = 0;
-        this._sx = 0; this._sy = 0;
-        this._moved = false;
+        this._drag = false; this._moved = false;
+        this._px = 0; this._py = 0; this._sx = 0; this._sy = 0;
 
         this.input.on('pointerdown', p => {
             this._drag  = true;
             this._moved = false;
-            this._px    = p.x; this._py = p.y;
-            this._sx    = this.cameras.main.scrollX;
-            this._sy    = this.cameras.main.scrollY;
+            this._px = p.x; this._py = p.y;
+            this._sx = this.cameras.main.scrollX;
+            this._sy = this.cameras.main.scrollY;
         });
         this.input.on('pointermove', p => {
             if (!this._drag) return;
@@ -602,27 +804,34 @@ class GameScene extends Phaser.Scene {
         });
         this.input.on('pointerup', p => {
             this._drag = false;
-            if (!this._moved) {
-                const wp = this.cameras.main.getWorldPoint(p.x, p.y);
-                const { q, r } = p2h(wp.x, wp.y);
-                const key = hkey(q, r);
-                if (GS.tiles[key]) {
-                    this.drawHighlight(q, r);
-                    openPanel(key);
-                } else if (GS.panelOpen) {
-                    closePanel();
-                }
+            if (this._moved) return;
+            const wp  = this.cameras.main.getWorldPoint(p.x, p.y);
+            const { q, r } = p2h(wp.x, wp.y);
+            const key = hkey(q, r);
+            if (GS.tiles[key]) {
+                this.drawHighlight(q, r);
+                openPanel(key);
+            } else if (GS.fog[key] && GS.fog[key].fogLevel === 1) {
+                const fog = GS.fog[key];
+                const adj = neighbors(fog.q, fog.r).some(([nq, nr]) => GS.tiles[hkey(nq, nr)]);
+                if (adj) { this.drawFogHighlight(fog.q, fog.r); openFogPanel(key, fog.q, fog.r); }
+                else if (GS.panelOpen) closePanel();
+            } else if (GS.panelOpen) {
+                closePanel();
             }
         });
 
         updateHUD();
+
+        // Intro hint
+        setTimeout(() => showToast('Tap your hive to assign nurses and guards'), 1500);
     }
 
     drawAllTiles() {
         const g = this.bgGfx;
         g.clear();
 
-        // Fog (far ring, dim)
+        // Fog
         Object.values(GS.fog).forEach(({ q, r, fogLevel }) => {
             const { x, y } = h2p(q, r);
             const alpha = fogLevel === 1 ? 0.55 : 0.3;
@@ -630,6 +839,13 @@ class GameScene extends Phaser.Scene {
             g.lineStyle(1, 0x0c180c, alpha * 0.8);
             this._hexPath(g, x, y);
             g.fillPath(); g.strokePath();
+
+            // Scout mission glow on fog tiles
+            if (fogLevel === 1 && GS.scoutMissions.find(m => m.key === hkey(q, r))) {
+                g.fillStyle(0xe09a18, 0.18);
+                this._hexPath(g, x, y);
+                g.fillPath();
+            }
         });
 
         // Territory tiles
@@ -643,33 +859,26 @@ class GameScene extends Phaser.Scene {
             this._hexPath(g, x, y);
             g.fillPath(); g.strokePath();
 
-            // Markers
             if (tile.type === 'WATER') {
-                g.fillStyle(0x2060a0, 0.7);
-                g.fillCircle(x, y, 5);
+                g.fillStyle(0x2060a0, 0.7); g.fillCircle(x, y, 5);
             } else if (tile.type === 'STRUCTURE') {
-                g.fillStyle(0x606060, 0.5);
-                g.fillRect(x - 5, y - 5, 10, 10);
+                g.fillStyle(0x606060, 0.5); g.fillRect(x-5, y-5, 10, 10);
             } else if (tile.type === 'DEAD_ZONE') {
-                // subtle X mark
                 g.lineStyle(1, 0x301808, 0.5);
-                g.lineBetween(x - 5, y - 5, x + 5, y + 5);
-                g.lineBetween(x + 5, y - 5, x - 5, y + 5);
+                g.lineBetween(x-5, y-5, x+5, y+5);
+                g.lineBetween(x+5, y-5, x-5, y+5);
             } else if (def.forage > 0 && s >= 2) {
-                // small pollen dot on healthy tiles
                 g.fillStyle(0x80c040, 0.4);
                 g.fillCircle(x + HEX.SIZE * 0.52, y - HEX.SIZE * 0.38, 3);
             }
         });
 
-        // Hive: amber dot
+        // Hive dot
         const hp = h2p(0, 0);
-        g.fillStyle(0xe09a18, 1);
-        g.fillCircle(hp.x, hp.y, 7);
-        g.lineStyle(2, 0xf0bc40, 0.8);
-        g.strokeCircle(hp.x, hp.y, 9);
+        g.fillStyle(0xe09a18, 1);    g.fillCircle(hp.x, hp.y, 7);
+        g.lineStyle(2, 0xf0bc40, 0.8); g.strokeCircle(hp.x, hp.y, 9);
 
-        // Forage radius ring (faint)
+        // Forage radius ring
         g.lineStyle(1, 0xe09a18, 0.12);
         g.strokeCircle(hp.x, hp.y, HEX.SIZE * HEX.SQRT3 * GS.forageRadius * 1.02);
     }
@@ -682,34 +891,30 @@ class GameScene extends Phaser.Scene {
         this.hlGfx.strokePath();
     }
 
-    clearHighlight() {
+    drawFogHighlight(q, r) {
+        const { x, y } = h2p(q, r);
         this.hlGfx.clear();
+        this.hlGfx.lineStyle(1.5, 0xe09a18, 0.35);
+        this._hexPath(this.hlGfx, x, y);
+        this.hlGfx.strokePath();
     }
+
+    clearHighlight() { this.hlGfx.clear(); }
 
     startHivePulse() {
         const { x, y } = h2p(0, 0);
         const state = { r: HEX.SIZE * 0.5, a: 0.5 };
         const g = this.fxGfx;
-
         this.tweens.add({
-            targets: state,
-            r: HEX.SIZE * 1.6,
-            a: 0,
-            duration: 2200,
-            repeat: -1,
-            ease: 'Sine.easeOut',
-            onUpdate: () => {
-                g.clear();
-                g.lineStyle(1.5, 0xe09a18, state.a);
-                g.strokeCircle(x, y, state.r);
-            },
+            targets: state, r: HEX.SIZE * 1.6, a: 0,
+            duration: 2200, repeat: -1, ease: 'Sine.easeOut',
+            onUpdate: () => { g.clear(); g.lineStyle(1.5, 0xe09a18, state.a); g.strokeCircle(x, y, state.r); },
         });
     }
 
     _hexPath(g, cx, cy) {
         const pts = corners(cx, cy, HEX.SIZE - 1.5);
-        g.beginPath();
-        g.moveTo(pts[0], pts[1]);
+        g.beginPath(); g.moveTo(pts[0], pts[1]);
         for (let i = 2; i < 12; i += 2) g.lineTo(pts[i], pts[i+1]);
         g.closePath();
     }
@@ -724,57 +929,41 @@ class GameScene extends Phaser.Scene {
 
     refreshTiles() {
         this.drawAllTiles();
-        // Refresh forager count text objects
         this.foragerTexts = this.foragerTexts || {};
-        // Clear old texts
         Object.values(this.foragerTexts).forEach(t => t.destroy());
         this.foragerTexts = {};
-        // Draw new
         Object.entries(GS.forageTiles).forEach(([key, count]) => {
             const tile = GS.tiles[key];
             if (!tile) return;
             const { x, y } = h2p(tile.q, tile.r);
             const t = this.add.text(x, y + HEX.SIZE * 0.55, `${count}`, {
-                font: '11px Courier New',
-                fill: '#e09a18',
-                stroke: '#080f08',
-                strokeThickness: 3,
+                font: '11px Courier New', fill: '#e09a18',
+                stroke: '#080f08', strokeThickness: 3,
             }).setOrigin(0.5, 0.5);
             this.foragerTexts[key] = t;
         });
-        // Re-stack layers correctly
         this.children.bringToTop(this.hlGfx);
         this.children.bringToTop(this.fxGfx);
         Object.values(this.foragerTexts).forEach(t => this.children.bringToTop(t));
     }
 }
 
-// ═══════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════
 // LAUNCH
-// ═══════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════
 
 const game = new Phaser.Game({
-    type: Phaser.AUTO,
-    backgroundColor: '#080f08',
-    width:  window.innerWidth,
-    height: window.innerHeight,
-    scene:  [GameScene],
-    scale: {
-        mode:       Phaser.Scale.RESIZE,
-        autoCenter: Phaser.Scale.CENTER_BOTH,
-    },
+    type: Phaser.AUTO, backgroundColor: '#080f08',
+    width: window.innerWidth, height: window.innerHeight,
+    scene: [GameScene],
+    scale: { mode: Phaser.Scale.RESIZE, autoCenter: Phaser.Scale.CENTER_BOTH },
     input: { activePointers: 2 },
 });
 
-window.addEventListener('resize', () => {
-    game.scale.resize(window.innerWidth, window.innerHeight);
-});
+window.addEventListener('resize', () => game.scale.resize(window.innerWidth, window.innerHeight));
 
-// Register service worker for PWA / offline support
 if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./sw.js').catch(() => {});
-    });
+    window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {}));
 }
 </script>
 </body>
