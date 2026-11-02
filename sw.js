@@ -1,10 +1,14 @@
-const CACHE = 'apiary-v7';
+const CACHE = 'apiary-v9';
 const BASE = self.registration.scope;
 const ASSETS = [
     BASE,
     BASE + 'index.html',
     BASE + 'manifest.json',
     BASE + 'phaser.min.js',
+    BASE + 'js/engine.js',
+    BASE + 'js/tick.js',
+    BASE + 'js/ui.js',
+    BASE + 'js/scene.js',
     BASE + 'icons/icon-192.png',
     BASE + 'icons/icon-512.png',
 ];
