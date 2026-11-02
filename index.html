@@ -1,0 +1,781 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>The Apiary</title>
+    <link rel="manifest" href="manifest.json">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="The Apiary">
+    <link rel="apple-touch-icon" href="icons/icon-192.png">
+    <meta name="theme-color" content="#080f08">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        html, body {
+            width: 100%; height: 100%;
+            background: #080f08;
+            overflow: hidden;
+            touch-action: none;
+        }
+        canvas { display: block; }
+
+        /* ── HUD ── */
+        #hud {
+            position: fixed; top: 0; left: 0; right: 0; z-index: 50;
+            display: flex; justify-content: space-between; align-items: flex-start;
+            padding: env(safe-area-inset-top, 12px) 20px 0;
+            padding-top: max(env(safe-area-inset-top, 0px), 12px);
+            pointer-events: none;
+            background: linear-gradient(to bottom, rgba(8,15,8,0.9) 60%, transparent);
+            padding-bottom: 20px;
+        }
+        .hud-stat { text-align: center; }
+        .hud-label {
+            font: 600 9px/1 'Courier New', monospace;
+            letter-spacing: 2px; text-transform: uppercase; color: #4a7040;
+        }
+        .hud-value {
+            font: 700 26px/1.1 'Courier New', monospace;
+            color: #e09a18; letter-spacing: 1px;
+            text-shadow: 0 0 12px rgba(224,154,24,0.4);
+        }
+        .hud-center { text-align: center; padding-top: 2px; }
+        .hud-season {
+            font: 400 14px/1 Georgia, serif;
+            color: #c8a860; letter-spacing: 1px;
+        }
+        .hud-day {
+            font: 400 11px/1.4 'Courier New', monospace;
+            color: #3a5a30; letter-spacing: 1px; margin-top: 2px;
+        }
+
+        /* ── Phase Label ── */
+        #phase-tag {
+            position: fixed; top: 68px; left: 50%; transform: translateX(-50%);
+            z-index: 49; pointer-events: none;
+            font: 400 10px/1 'Courier New', monospace;
+            letter-spacing: 3px; text-transform: uppercase;
+            color: #2a4a28; padding: 4px 14px;
+            border: 1px solid #1a3018; border-radius: 20px;
+            background: rgba(8,15,8,0.7);
+        }
+
+        /* ── Tile Info Panel ── */
+        #tile-panel {
+            position: fixed; bottom: 0; left: 0; right: 0; z-index: 50;
+            background: linear-gradient(to top, #050c05 80%, rgba(5,12,5,0.95));
+            border-top: 1px solid #1e3820;
+            padding: 20px 20px calc(20px + env(safe-area-inset-bottom, 0px));
+            transform: translateY(100%);
+            transition: transform 0.28s cubic-bezier(0.32, 0, 0.67, 0);
+            will-change: transform;
+        }
+        #tile-panel.open {
+            transform: translateY(0);
+            transition: transform 0.28s cubic-bezier(0.33, 1, 0.68, 1);
+        }
+        .panel-row-top {
+            display: flex; justify-content: space-between; align-items: flex-start;
+            margin-bottom: 8px;
+        }
+        .panel-tile-name {
+            font: 400 20px/1 Georgia, serif; color: #e09a18;
+        }
+        .panel-close {
+            background: none; border: none;
+            color: #2a4a28; font-size: 26px; line-height: 1;
+            cursor: pointer; padding: 0 2px; margin-top: -4px;
+        }
+        .panel-stage {
+            display: inline-block;
+            font: 600 10px/1 'Courier New', monospace;
+            letter-spacing: 2px; text-transform: uppercase;
+            padding: 4px 12px; border-radius: 20px; margin-bottom: 12px;
+        }
+        .stage-0 { background: rgba(40,20,10,.5); color: #7a5040; border: 1px solid #3a2010; }
+        .stage-1 { background: rgba(60,50,15,.5); color: #a09030; border: 1px solid #5a4820; }
+        .stage-2 { background: rgba(30,60,20,.5); color: #80b040; border: 1px solid #406030; }
+        .stage-3 { background: rgba(20,80,30,.5); color: #50d870; border: 1px solid #308840; }
+        .panel-detail {
+            font: 400 13px/1.7 'Courier New', monospace;
+            color: #5a7a50; white-space: pre-line;
+            margin-bottom: 14px;
+        }
+        .panel-actions { display: flex; gap: 8px; }
+        .action-btn {
+            flex: 1; padding: 11px 8px;
+            background: rgba(224,154,24,0.08);
+            border: 1px solid rgba(224,154,24,0.25);
+            border-radius: 6px; color: #c8a040;
+            font: 400 13px/1 Georgia, serif;
+            cursor: pointer; text-align: center;
+            transition: background .15s, border-color .15s;
+        }
+        .action-btn:active { background: rgba(224,154,24,0.2); border-color: rgba(224,154,24,0.5); }
+        .action-btn.secondary {
+            background: rgba(60,90,40,0.12);
+            border-color: rgba(80,120,50,0.3);
+            color: #608050;
+        }
+
+        /* ── Forage Radius Hint ── */
+        #range-hint {
+            position: fixed; bottom: 20px; right: 20px;
+            z-index: 49; pointer-events: none;
+            font: 400 10px/1.5 'Courier New', monospace;
+            color: #2a4a28; letter-spacing: 1px;
+            text-align: right;
+        }
+    </style>
+</head>
+<body>
+
+<div id="hud">
+    <div class="hud-stat">
+        <div class="hud-label">Bees</div>
+        <div class="hud-value" id="hud-bees">15</div>
+    </div>
+    <div class="hud-center">
+        <div class="hud-season" id="hud-season">Early Spring</div>
+        <div class="hud-day" id="hud-day">Day 1 · Year 1</div>
+    </div>
+    <div class="hud-stat">
+        <div class="hud-label">Honey</div>
+        <div class="hud-value" id="hud-honey">0</div>
+    </div>
+</div>
+
+<div id="phase-tag">Phase I — Colony</div>
+
+<div id="tile-panel">
+    <div class="panel-row-top">
+        <div class="panel-tile-name" id="panel-name">—</div>
+        <button class="panel-close" id="panel-close">×</button>
+    </div>
+    <div class="panel-stage stage-1" id="panel-stage">Sparse</div>
+    <div class="panel-detail" id="panel-detail"></div>
+    <div class="panel-actions" id="panel-actions"></div>
+</div>
+
+<div id="range-hint">Forage radius: 1 tile</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/phaser/3.60.0/phaser.min.js"></script>
+<script>
+'use strict';
+
+// ═══════════════════════════════════════════════════════════
+// HEX CONSTANTS & MATH  (pointy-top, axial coords)
+// ═══════════════════════════════════════════════════════════
+
+const HEX = {
+    SIZE:  38,
+    SQRT3: Math.sqrt(3),
+};
+
+function h2p(q, r) {   // hex → pixel (center)
+    return {
+        x: HEX.SIZE * (HEX.SQRT3 * q + HEX.SQRT3 / 2 * r),
+        y: HEX.SIZE * 1.5 * r,
+    };
+}
+
+function p2h(x, y) {   // pixel → hex (rounded)
+    const q = (x * HEX.SQRT3 / 3 - y / 3) / HEX.SIZE;
+    const r = y * 2 / 3 / HEX.SIZE;
+    return hround(q, r);
+}
+
+function hround(fq, fr) {
+    const fs = -fq - fr;
+    let q = Math.round(fq), r = Math.round(fr), s = Math.round(fs);
+    const dq = Math.abs(q - fq), dr = Math.abs(r - fr), ds = Math.abs(s - fs);
+    if (dq > dr && dq > ds) q = -r - s;
+    else if (dr > ds)        r = -q - s;
+    return { q, r };
+}
+
+function hkey(q, r) { return `${q},${r}`; }
+
+function neighbors(q, r) {
+    return [[q+1,r],[q+1,r-1],[q,r-1],[q-1,r],[q-1,r+1],[q,r+1]];
+}
+
+function hdist(q1, r1, q2, r2) {
+    return (Math.abs(q1-q2) + Math.abs(q1+r1-q2-r2) + Math.abs(r1-r2)) / 2;
+}
+
+function hexesInRadius(cq, cr, rad) {
+    const res = [];
+    for (let dq = -rad; dq <= rad; dq++)
+        for (let dr = Math.max(-rad,-dq-rad); dr <= Math.min(rad,-dq+rad); dr++)
+            res.push([cq+dq, cr+dr]);
+    return res;
+}
+
+// Pointy-top corners (world coords)
+function corners(cx, cy, r) {
+    const pts = [];
+    for (let i = 0; i < 6; i++) {
+        const a = Math.PI / 180 * (60 * i - 30);
+        pts.push(cx + r * Math.cos(a), cy + r * Math.sin(a));
+    }
+    return pts;
+}
+
+// ═══════════════════════════════════════════════════════════
+// TILE DEFINITIONS
+// ═══════════════════════════════════════════════════════════
+
+// Each stage: [dead_color, sparse_color, recovering_color, thriving_color]  (fill, rim)
+const TILES = {
+    WILDFLOWER: {
+        name: 'Wildflower Meadow', forage: 3,
+        fill: [0x1a1008, 0x2a4014, 0x3d6020, 0x527e28],
+        rim:  [0x2a1a10, 0x3a5820, 0x5a8830, 0x78aa3a],
+    },
+    FOREST: {
+        name: 'Forest', forage: 2,
+        fill: [0x1a1008, 0x1a2e14, 0x1e3e18, 0x20501a],
+        rim:  [0x2a1a10, 0x283e20, 0x2c5824, 0x307030],
+    },
+    CLOVER: {
+        name: 'Clover Field', forage: 4,
+        fill: [0x1a1008, 0x2a4818, 0x406820, 0x5a8c28],
+        rim:  [0x2a1a10, 0x3a6020, 0x5a8830, 0x7ab040],
+    },
+    SUNFLOWER: {
+        name: 'Sunflower Field', forage: 4,
+        fill: [0x1a1008, 0x30300e, 0x484812, 0x686018],
+        rim:  [0x2a1a10, 0x404016, 0x60601a, 0x888024],
+    },
+    DEAD_ZONE: {
+        name: 'Dead Zone', forage: 0,
+        fill: [0x130a04, 0x130a04, 0x1e1208, 0x281a0a],
+        rim:  [0x201008, 0x201008, 0x2c1a0c, 0x382410],
+    },
+    WATER: {
+        name: 'Water Source', forage: 0,
+        fill: [0x0a1828, 0x0a1828, 0x122038, 0x162848],
+        rim:  [0x142030, 0x142030, 0x1c3050, 0x204068],
+    },
+    STRUCTURE: {
+        name: 'Abandoned Structure', forage: 0,
+        fill: [0x1c1c18, 0x1c1c18, 0x242420, 0x2e2e28],
+        rim:  [0x2a2a24, 0x2a2a24, 0x363630, 0x404040],
+    },
+    HIVE_BOX: {
+        name: 'Open Hive Box', forage: 0,
+        fill: [0x2a1c08, 0x2a1c08, 0x2a1c08, 0x2a1c08],
+        rim:  [0xe09a18, 0xe09a18, 0xe09a18, 0xe09a18],  // always amber
+    },
+};
+
+const STAGE_NAMES  = ['Dead', 'Sparse', 'Recovering', 'Thriving'];
+
+// ═══════════════════════════════════════════════════════════
+// MAP GENERATION
+// ═══════════════════════════════════════════════════════════
+
+function generateMap() {
+    const tiles = {};
+
+    // Starting territory: all hexes within radius 3 → 37 tiles
+    const allHexes = hexesInRadius(0, 0, 3);
+
+    // Tile type distribution pool (36 non-hive tiles)
+    const pool = [
+        ...Array(13).fill('WILDFLOWER'),
+        ...Array(7).fill('FOREST'),
+        ...Array(4).fill('CLOVER'),
+        ...Array(3).fill('SUNFLOWER'),
+        ...Array(5).fill('DEAD_ZONE'),
+        ...Array(2).fill('WATER'),
+        ...Array(1).fill('STRUCTURE'),
+    ];
+    // shuffle
+    for (let i = pool.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [pool[i], pool[j]] = [pool[j], pool[i]];
+    }
+
+    let poolIdx = 0;
+    allHexes.forEach(([q, r]) => {
+        const key = hkey(q, r);
+        const dist = hdist(q, r, 0, 0);
+        let type, stage;
+
+        if (q === 0 && r === 0) {
+            type = 'HIVE_BOX';
+            stage = 3;
+        } else {
+            type = pool[poolIdx++ % pool.length];
+            // Water is always thriving; dead zones start dead;
+            // near-hive tiles start recovering; outer tiles sparse
+            if (type === 'WATER')         stage = 3;
+            else if (type === 'DEAD_ZONE') stage = 0;
+            else if (dist <= 1)            stage = 2;
+            else                           stage = 1;
+        }
+
+        tiles[key] = { q, r, type, stage, territory: 'home', foragers: 0 };
+    });
+
+    return tiles;
+}
+
+function generateFog(tiles) {
+    const fog = {};
+    const known = new Set(Object.keys(tiles));
+
+    // Ring 1 (adjacent to territory)
+    known.forEach(k => {
+        const { q, r } = tiles[k];
+        neighbors(q, r).forEach(([nq, nr]) => {
+            const nk = hkey(nq, nr);
+            if (!known.has(nk) && !fog[nk])
+                fog[nk] = { q: nq, r: nr, fogLevel: 1 };
+        });
+    });
+    // Ring 2
+    const ring1 = new Set(Object.keys(fog));
+    ring1.forEach(k => {
+        const { q, r } = fog[k];
+        neighbors(q, r).forEach(([nq, nr]) => {
+            const nk = hkey(nq, nr);
+            if (!known.has(nk) && !ring1.has(nk) && !fog[nk])
+                fog[nk] = { q: nq, r: nr, fogLevel: 2 };
+        });
+    });
+    return fog;
+}
+
+// ═══════════════════════════════════════════════════════════
+// GAME STATE
+// ═══════════════════════════════════════════════════════════
+
+const GS = {
+    bees: 15, honey: 0, nectar: 0,
+    season: 'Spring', day: 1, year: 1,
+    forageRadius: 1,
+    forageTiles: {},       // key → forager count
+    assignedBees: 0,       // total bees currently foraging
+    broodProgress: 0,      // 0-21; new bee every 21 days
+    tiles: {}, fog: {},
+    selectedKey: null,
+    panelOpen: false,
+    speed: 1,              // 0.5 = slow, 1 = normal, 2 = fast
+    dayMs: 3000,           // real ms per in-game day at speed 1
+    _elapsed: 0,
+    _honeyFrac: 0,
+};
+
+const SEASONS = ['Spring', 'Summer', 'Fall', 'Winter'];
+const SEASON_DAYS = [25, 35, 25, 15];  // days per season (total 100/year)
+
+// ═══════════════════════════════════════════════════════════
+// HTML UI
+// ═══════════════════════════════════════════════════════════
+
+function updateHUD() {
+    const free = GS.bees - GS.assignedBees;
+    document.getElementById('hud-bees').textContent   = `${GS.bees}`;
+    document.getElementById('hud-honey').textContent  = `${GS.honey}`;
+    document.getElementById('hud-season').textContent = GS.season;
+    document.getElementById('hud-day').textContent    = `Day ${GS.day} · Year ${GS.year}`;
+    document.getElementById('range-hint').textContent =
+        `${free} free · ${GS.assignedBees} foraging`;
+}
+
+function seasonFromDay(day) {
+    const dayOfYear = ((day - 1) % 100);
+    let acc = 0;
+    for (let i = 0; i < SEASONS.length; i++) {
+        acc += SEASON_DAYS[i];
+        if (dayOfYear < acc) return SEASONS[i];
+    }
+    return SEASONS[3];
+}
+
+function advanceDay() {
+    GS.day++;
+    GS.season = seasonFromDay(GS.day);
+
+    // New year
+    const dayOfYear = (GS.day - 1) % 100;
+    if (dayOfYear === 0 && GS.day > 1) GS.year++;
+
+    // Honey collection from foragers
+    let nectarGained = 0;
+    Object.entries(GS.forageTiles).forEach(([key, count]) => {
+        const tile = GS.tiles[key];
+        if (!tile || tile.stage === 0) return;
+        const def = TILES[tile.type];
+        if (def && def.forage > 0) {
+            const efficiency = GS.season === 'Winter' ? 0 : (GS.season === 'Fall' ? 0.6 : 1.0);
+            nectarGained += def.forage * count * 0.4 * efficiency;
+        }
+    });
+
+    // Winter: colony consumes honey (survival mechanic)
+    let consumed = 0;
+    if (GS.season === 'Winter') {
+        consumed = GS.bees * 0.05;  // 0.05 lbs per bee per day
+    }
+
+    GS._honeyFrac += nectarGained - consumed;
+    if (GS._honeyFrac >= 1) {
+        const gained = Math.floor(GS._honeyFrac);
+        GS.honey += gained;
+        GS._honeyFrac -= gained;
+    } else if (GS._honeyFrac < 0 && GS.honey > 0) {
+        const lost = Math.ceil(-GS._honeyFrac);
+        GS.honey = Math.max(0, GS.honey - lost);
+        GS._honeyFrac += lost;
+    }
+
+    // Brood cycle: 1 new worker bee every 21 days
+    GS.broodProgress++;
+    if (GS.broodProgress >= 21) {
+        GS.broodProgress = 0;
+        GS.bees += Math.max(1, Math.floor(GS.bees * 0.05));  // colony grows ~5% per cycle
+    }
+
+    // Tile healing: random slow tick to show tiles recovering
+    if (GS.day % 5 === 0) {
+        const keys = Object.keys(GS.tiles);
+        const k = keys[Math.floor(Math.random() * keys.length)];
+        const t = GS.tiles[k];
+        if (t && t.type !== 'DEAD_ZONE' && t.type !== 'WATER' && t.stage < 3) {
+            // Only heal if foragers have visited nearby tiles
+            const dist = hdist(t.q, t.r, 0, 0);
+            if (dist <= GS.forageRadius) t.stage = Math.min(3, t.stage + 1);
+        }
+    }
+
+    // Forage radius grows with colony size
+    if (GS.bees >= 100) GS.forageRadius = 2;
+    if (GS.bees >= 400) GS.forageRadius = 3;
+
+    updateHUD();
+    if (window._scene) window._scene.refreshTiles();
+}
+
+function openPanel(key) {
+    const tile = GS.tiles[key];
+    if (!tile) return;
+    const def = TILES[tile.type];
+    if (!def) return;
+
+    document.getElementById('panel-name').textContent = def.name;
+
+    const stageEl = document.getElementById('panel-stage');
+    stageEl.textContent  = STAGE_NAMES[tile.stage];
+    stageEl.className    = `panel-stage stage-${tile.stage}`;
+
+    // Detail text
+    const dist = hdist(tile.q, tile.r, 0, 0);
+    let detail = '';
+    if (def.forage > 0) {
+        const yieldLabel = ['', 'Low', 'Moderate', 'Good', 'High'][def.forage];
+        detail += `Forage yield: ${yieldLabel}\n`;
+        detail += `Distance from hive: ${dist} tile${dist !== 1 ? 's' : ''}\n`;
+        if (dist > GS.forageRadius) detail += `⚠ Outside current forage radius (${GS.forageRadius})`;
+    } else if (tile.type === 'DEAD_ZONE') {
+        detail = `Barren land — no nectar.\nBees can restore this through pollination\nof surrounding tiles.`;
+    } else if (tile.type === 'WATER') {
+        detail = `Clean water source.\nSupports colony health and cooling.\nBees drink here automatically.`;
+    } else if (tile.type === 'HIVE_BOX') {
+        detail = `Your colony.\n${GS.bees} bees · ${GS.honey} lbs honey\nForage radius: ${GS.forageRadius} tile`;
+    } else if (tile.type === 'STRUCTURE') {
+        detail = `An abandoned building.\nScouts could investigate for a\nnatural wild hive site inside.`;
+    }
+    document.getElementById('panel-detail').textContent = detail;
+
+    // Action buttons
+    const actionsEl = document.getElementById('panel-actions');
+    actionsEl.innerHTML = '';
+    const tileKey = hkey(tile.q, tile.r);
+
+    if (def.forage > 0 && dist <= GS.forageRadius && tile.stage > 0) {
+        const alreadyHere = GS.forageTiles[tileKey] || 0;
+        if (alreadyHere > 0) {
+            // Recall button
+            const btn = document.createElement('button');
+            btn.className = 'action-btn';
+            btn.textContent = `Recall (${alreadyHere} foraging)`;
+            btn.onclick = () => {
+                GS.assignedBees -= alreadyHere;
+                delete GS.forageTiles[tileKey];
+                closePanel();
+                if (window._scene) window._scene.refreshTiles();
+            };
+            actionsEl.appendChild(btn);
+        } else {
+            const freeBees = GS.bees - GS.assignedBees;
+            const btn = document.createElement('button');
+            btn.className = 'action-btn';
+            btn.textContent = freeBees > 0 ? 'Send foragers' : 'No free bees';
+            btn.disabled = freeBees === 0;
+            btn.onclick = () => {
+                if (freeBees <= 0) return;
+                const send = Math.max(1, Math.min(5, Math.floor(freeBees * 0.3)));
+                GS.forageTiles[tileKey] = send;
+                GS.assignedBees += send;
+                closePanel();
+                if (window._scene) window._scene.refreshTiles();
+            };
+            actionsEl.appendChild(btn);
+        }
+    }
+
+    if (dist > GS.forageRadius || tile.type === 'STRUCTURE') {
+        const btn = document.createElement('button');
+        btn.className = 'action-btn secondary';
+        btn.textContent = tile.type === 'STRUCTURE' ? 'Scout building' : 'Send scouts';
+        btn.onclick = () => { closePanel(); };
+        actionsEl.appendChild(btn);
+    }
+
+    document.getElementById('tile-panel').classList.add('open');
+    GS.panelOpen = true;
+    GS.selectedKey = key;
+}
+
+function closePanel() {
+    document.getElementById('tile-panel').classList.remove('open');
+    GS.panelOpen  = false;
+    GS.selectedKey = null;
+    if (window._scene) window._scene.clearHighlight();
+}
+
+document.getElementById('panel-close').addEventListener('click', closePanel);
+
+// ═══════════════════════════════════════════════════════════
+// PHASER SCENE
+// ═══════════════════════════════════════════════════════════
+
+class GameScene extends Phaser.Scene {
+    constructor() { super('GameScene'); }
+
+    create() {
+        window._scene = this;
+
+        GS.tiles = generateMap();
+        GS.fog   = generateFog(GS.tiles);
+
+        // All geometry drawn on one Graphics, plus a highlight layer
+        this.bgGfx   = this.add.graphics();
+        this.hlGfx   = this.add.graphics();
+        this.fxGfx   = this.add.graphics();  // pulse
+
+        this.drawAllTiles();
+        this.startHivePulse();
+
+        // Center camera on hive (0,0)
+        this.cameras.main.setScroll(
+            -this.cameras.main.width  / 2,
+            -this.cameras.main.height / 2,
+        );
+
+        // Input
+        this._drag = false;
+        this._px = 0; this._py = 0;
+        this._sx = 0; this._sy = 0;
+        this._moved = false;
+
+        this.input.on('pointerdown', p => {
+            this._drag  = true;
+            this._moved = false;
+            this._px    = p.x; this._py = p.y;
+            this._sx    = this.cameras.main.scrollX;
+            this._sy    = this.cameras.main.scrollY;
+        });
+        this.input.on('pointermove', p => {
+            if (!this._drag) return;
+            const dx = p.x - this._px, dy = p.y - this._py;
+            if (Math.abs(dx) > 6 || Math.abs(dy) > 6) {
+                this._moved = true;
+                const z = this.cameras.main.zoom;
+                this.cameras.main.setScroll(this._sx - dx / z, this._sy - dy / z);
+            }
+        });
+        this.input.on('pointerup', p => {
+            this._drag = false;
+            if (!this._moved) {
+                const wp = this.cameras.main.getWorldPoint(p.x, p.y);
+                const { q, r } = p2h(wp.x, wp.y);
+                const key = hkey(q, r);
+                if (GS.tiles[key]) {
+                    this.drawHighlight(q, r);
+                    openPanel(key);
+                } else if (GS.panelOpen) {
+                    closePanel();
+                }
+            }
+        });
+
+        updateHUD();
+    }
+
+    drawAllTiles() {
+        const g = this.bgGfx;
+        g.clear();
+
+        // Fog (far ring, dim)
+        Object.values(GS.fog).forEach(({ q, r, fogLevel }) => {
+            const { x, y } = h2p(q, r);
+            const alpha = fogLevel === 1 ? 0.55 : 0.3;
+            g.fillStyle(0x060d06, alpha);
+            g.lineStyle(1, 0x0c180c, alpha * 0.8);
+            this._hexPath(g, x, y);
+            g.fillPath(); g.strokePath();
+        });
+
+        // Territory tiles
+        Object.values(GS.tiles).forEach(tile => {
+            const { x, y } = h2p(tile.q, tile.r);
+            const def = TILES[tile.type];
+            const s   = tile.stage;
+
+            g.fillStyle(def.fill[s], 1);
+            g.lineStyle(1.5, def.rim[s], 0.9);
+            this._hexPath(g, x, y);
+            g.fillPath(); g.strokePath();
+
+            // Markers
+            if (tile.type === 'WATER') {
+                g.fillStyle(0x2060a0, 0.7);
+                g.fillCircle(x, y, 5);
+            } else if (tile.type === 'STRUCTURE') {
+                g.fillStyle(0x606060, 0.5);
+                g.fillRect(x - 5, y - 5, 10, 10);
+            } else if (tile.type === 'DEAD_ZONE') {
+                // subtle X mark
+                g.lineStyle(1, 0x301808, 0.5);
+                g.lineBetween(x - 5, y - 5, x + 5, y + 5);
+                g.lineBetween(x + 5, y - 5, x - 5, y + 5);
+            } else if (def.forage > 0 && s >= 2) {
+                // small pollen dot on healthy tiles
+                g.fillStyle(0x80c040, 0.4);
+                g.fillCircle(x + HEX.SIZE * 0.52, y - HEX.SIZE * 0.38, 3);
+            }
+        });
+
+        // Hive: amber dot
+        const hp = h2p(0, 0);
+        g.fillStyle(0xe09a18, 1);
+        g.fillCircle(hp.x, hp.y, 7);
+        g.lineStyle(2, 0xf0bc40, 0.8);
+        g.strokeCircle(hp.x, hp.y, 9);
+
+        // Forage radius ring (faint)
+        g.lineStyle(1, 0xe09a18, 0.12);
+        g.strokeCircle(hp.x, hp.y, HEX.SIZE * HEX.SQRT3 * GS.forageRadius * 1.02);
+    }
+
+    drawHighlight(q, r) {
+        const { x, y } = h2p(q, r);
+        this.hlGfx.clear();
+        this.hlGfx.lineStyle(2, 0xe09a18, 0.7);
+        this._hexPath(this.hlGfx, x, y);
+        this.hlGfx.strokePath();
+    }
+
+    clearHighlight() {
+        this.hlGfx.clear();
+    }
+
+    startHivePulse() {
+        const { x, y } = h2p(0, 0);
+        const state = { r: HEX.SIZE * 0.5, a: 0.5 };
+        const g = this.fxGfx;
+
+        this.tweens.add({
+            targets: state,
+            r: HEX.SIZE * 1.6,
+            a: 0,
+            duration: 2200,
+            repeat: -1,
+            ease: 'Sine.easeOut',
+            onUpdate: () => {
+                g.clear();
+                g.lineStyle(1.5, 0xe09a18, state.a);
+                g.strokeCircle(x, y, state.r);
+            },
+        });
+    }
+
+    _hexPath(g, cx, cy) {
+        const pts = corners(cx, cy, HEX.SIZE - 1.5);
+        g.beginPath();
+        g.moveTo(pts[0], pts[1]);
+        for (let i = 2; i < 12; i += 2) g.lineTo(pts[i], pts[i+1]);
+        g.closePath();
+    }
+
+    update(time, delta) {
+        GS._elapsed += delta * GS.speed;
+        if (GS._elapsed >= GS.dayMs) {
+            GS._elapsed -= GS.dayMs;
+            advanceDay();
+        }
+    }
+
+    refreshTiles() {
+        this.drawAllTiles();
+        // Refresh forager count text objects
+        this.foragerTexts = this.foragerTexts || {};
+        // Clear old texts
+        Object.values(this.foragerTexts).forEach(t => t.destroy());
+        this.foragerTexts = {};
+        // Draw new
+        Object.entries(GS.forageTiles).forEach(([key, count]) => {
+            const tile = GS.tiles[key];
+            if (!tile) return;
+            const { x, y } = h2p(tile.q, tile.r);
+            const t = this.add.text(x, y + HEX.SIZE * 0.55, `${count}`, {
+                font: '11px Courier New',
+                fill: '#e09a18',
+                stroke: '#080f08',
+                strokeThickness: 3,
+            }).setOrigin(0.5, 0.5);
+            this.foragerTexts[key] = t;
+        });
+        // Re-stack layers correctly
+        this.children.bringToTop(this.hlGfx);
+        this.children.bringToTop(this.fxGfx);
+        Object.values(this.foragerTexts).forEach(t => this.children.bringToTop(t));
+    }
+}
+
+// ═══════════════════════════════════════════════════════════
+// LAUNCH
+// ═══════════════════════════════════════════════════════════
+
+const game = new Phaser.Game({
+    type: Phaser.AUTO,
+    backgroundColor: '#080f08',
+    width:  window.innerWidth,
+    height: window.innerHeight,
+    scene:  [GameScene],
+    scale: {
+        mode:       Phaser.Scale.RESIZE,
+        autoCenter: Phaser.Scale.CENTER_BOTH,
+    },
+    input: { activePointers: 2 },
+});
+
+window.addEventListener('resize', () => {
+    game.scale.resize(window.innerWidth, window.innerHeight);
+});
+
+// Register service worker for PWA / offline support
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js').catch(() => {});
+    });
+}
+</script>
+</body>
+</html>
