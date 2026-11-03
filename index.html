@@ -99,6 +99,17 @@ button:disabled{opacity:.35;}
 .chip{font:11px var(--mono);padding:3px 8px;border-radius:10px;background:#1c2a1e;color:var(--good);}
 .chip.blue{color:var(--blue);}
 
+/* Compact field rows */
+.frow{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;padding:8px 0;border-top:1px solid var(--line);}
+.card h3+.frow{border-top:none;}
+.frow .rdesc{margin:2px 0 0;}
+.fs{display:flex;align-items:center;gap:4px;}
+.fs button{width:42px;min-height:42px;background:#1a281d;border:1px solid var(--line2);border-radius:8px;font:600 1.1rem var(--mono);color:var(--amber2);}
+.fs button:active{background:#2a3e2e;}
+.fs b{min-width:30px;text-align:center;font:700 1.15rem var(--mono);color:var(--amber);}
+.pair{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.pair .wide{margin-top:8px;}
+
 /* Hive toolbar */
 #hivebar{position:absolute;left:0;right:0;bottom:0;background:rgba(10,17,11,.94);border-top:1px solid var(--line);padding:8px 10px;z-index:5;}
 #hivebar .seg{grid-template-columns:repeat(3,1fr) 44px 44px 52px;margin:0;}
