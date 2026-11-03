@@ -303,7 +303,7 @@ function sendScout(k){
 }
 function revealTile(k){
     const f=G.fog[k];if(!f)return;
-    const type=pick({WILDFLOWER:3,FOREST:2,CLOVER:2,SUNFLOWER:1,DEAD_ZONE:2,WATER:1});
+    const type=pick({WILDFLOWER:3,FOREST:2,CLOVER:2,SUNFLOWER:1,DEAD_ZONE:hdist(f.q,f.r)>=5?8:6,WATER:1});
     G.tiles[k]={q:f.q,r:f.r,type,stage:type==='DEAD_ZONE'?0:1};delete G.fog[k];
     nbrs(f.q,f.r).forEach(([q,r])=>{const nk=hkey(q,r);if(G.tiles[nk])return;if(!G.fog[nk])G.fog[nk]={q,r,level:1};else G.fog[nk].level=1;});
     G._ach._scouted=(G._ach._scouted||0)+1;

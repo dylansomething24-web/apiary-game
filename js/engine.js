@@ -67,7 +67,7 @@ function makeMap(){
         tiles[hkey(q,r)]={q,r,type:t,stage:1};
     });
     for(let R=2;R<=3;R++)ringCells(R).forEach(([q,r])=>{
-        const t=pick({WILDFLOWER:4,FOREST:2,CLOVER:2,SUNFLOWER:1,DEAD_ZONE:3,WATER:1,STRUCTURE:R===3?1:0});
+        const t=pick({WILDFLOWER:4,FOREST:2,CLOVER:2,SUNFLOWER:1,DEAD_ZONE:R===2?6:7,WATER:1,STRUCTURE:R===3?1:0});
         tiles[hkey(q,r)]={q,r,type:t,stage:0};
     });
     return tiles;
