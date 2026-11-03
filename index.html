@@ -46,7 +46,11 @@ button:disabled{opacity:.35;}
 /* Main area */
 #main{flex:1;position:relative;overflow:hidden;}
 #game{position:absolute;inset:0;}
-#colony{position:absolute;inset:0;overflow-y:auto;-webkit-overflow-scrolling:touch;background:var(--bg);padding:12px 12px 24px;display:flex;flex-direction:column;gap:12px;}
+#colony{position:absolute;inset:0;background:var(--bg);display:flex;flex-direction:column;}
+#ctabs{flex:none;display:flex;gap:2px;padding:8px 6px 0;border-bottom:1px solid var(--line);background:#0b130c;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;}
+#ctabs button{flex:1 1 auto;min-height:40px;padding:6px 2px;background:transparent;border:1px solid transparent;border-bottom:none;border-radius:8px 8px 0 0;font:italic .86rem var(--serif);color:var(--muted);}
+#ctabs button.on{background:var(--bg);border-color:var(--line2);color:var(--amber);margin-bottom:-1px;}
+#cbody{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px 12px 24px;display:flex;flex-direction:column;gap:12px;}
 .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px;}
 .card h3{font:italic 1.1rem var(--serif);color:var(--amber);margin-bottom:8px;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;}
 .card h3 .sub{font:12px var(--mono);color:var(--muted);font-style:normal;}
@@ -148,7 +152,7 @@ button:disabled{opacity:.35;}
 
     <main id="main">
         <div id="game"></div>
-        <section id="colony" hidden></section>
+        <section id="colony" hidden><nav id="ctabs"></nav><div id="cbody"></div></section>
         <div id="hivebar" hidden>
             <div class="seg">
                 <button data-a="hmode" data-v="inspect">Move</button>

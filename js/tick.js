@@ -66,13 +66,29 @@ function tick(){
         warnOnce('larva',`${starved} ${starved>1?'larvae':'larva'} died — ${why}.`,4);
     }
 
-    // Builders draw new comb (wax costs honey)
+    // Builders deepen storage cells if told to, otherwise draw new comb (wax costs honey)
     let built=0;
-    if(G.builders>0){
+    if(e.dpg){
+        if(e.deepRate>0){
+            G._dp+=e.deepRate;
+            while(G._dp>=1){
+                const cost=DEEP_COST[G.combLvl];if(G.honey<cost)break;
+                G.deepDone++;G.honey-=cost;G._dp-=1;
+                if(G.deepDone>=combCount('s')){
+                    G.combLvl++;G.deepDone=0;G.deepen=false;G._dp=0;
+                    toast(`Comb deepened — each storage cell now holds ${cellCapAt(G.combLvl)} lb`,'green');hap([40,20,40]);Snd.honey();break;
+                }
+            }
+            if(G._dp>2)G._dp=2;
+        }
+    }else if(G.builders>0){
         G._bf+=G.builders*BUILD_RATE;
         while(G._bf>=1&&G.honey>=CELL_COST){
             const k=nextFrontier();if(!k){G._bf=0;break;}
-            G.comb[k]={t:newCellType(),a:-1};G.honey-=CELL_COST;G._bf-=1;built++;
+            let t=newCellType();
+            // brood belongs in the middle: swap an inner storage cell to brood and put the storage out here
+            if(t==='b'&&G.newComb==='auto'){const inner=innerStorage(kdist(k));if(inner){G.comb[inner]={t:'b',a:-1};t='s';}}
+            G.comb[k]={t,a:-1};G.honey-=CELL_COST;G._bf-=1;built++;
         }
         if(G._bf>2)G._bf=2;
     }

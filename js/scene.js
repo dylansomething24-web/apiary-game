@@ -204,7 +204,7 @@ class GameScene extends Phaser.Scene{
     drawHive(){
         const g=this.hiveG;g.clear();
         const store=Object.keys(G.comb).filter(k=>G.comb[k].t==='s').sort((a,b)=>kdist(a)-kdist(b)||a.localeCompare(b));
-        const honeyCells=G.honey/CELL_CAP,allCells=(G.honey+G.nectar)/CELL_CAP;
+        const per=perCell(),honeyCells=G.honey/per,allCells=(G.honey+G.nectar)/per;
         const sIdx={};store.forEach((k,i)=>sIdx[k]=i);
         const fk=nextFrontier();
         if(fk&&G.builders>0){const{q,r}=kq(fk),{x,y}=hv2p(q,r);g.lineStyle(1.5,0xc89a50,.35+.5*G._bf);this.hex(g,x,y,HS);g.strokePath();g.fillStyle(0xc89a50,.15*G._bf);this.hex(g,x,y,HS);g.fillPath();}

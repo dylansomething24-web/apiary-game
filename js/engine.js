@@ -6,7 +6,9 @@ const STG=['Barren','Sparse','Recovering','Thriving'];
 const STAGE_MULT=[0.25,0.6,1,1.3];
 const STAGE_NAMES=['','New Swarm','Wintered Colony','Thriving Colony','Proven Colony','Legacy Colony'];
 const LAY={conserve:2,normal:4,overdrive:7};      // eggs per day
-const CELL_CAP=1.5;      // lb of honey/nectar one storage cell holds
+const DEEP_CAPS=[1.5,2,2.5,3];   // lb one storage cell holds, by comb level
+const DEEP_COST=[0.15,0.25,0.35]; // lb honey (wax) to deepen one cell to the next level
+const DEEP_RATE=1.5;     // cells one builder deepens per day
 const CELL_COST=0.4;     // lb honey (as wax) per new cell
 const BUILD_RATE=0.5;    // cells per builder per day
 const PROC_RATE=1.2;     // lb nectar per processor per day
@@ -15,7 +17,7 @@ const NURSE_CAP=4;       // larvae one nurse can feed
 const LARVA_COST=0.04;   // lb honey per larva per day
 const ADULT_COST=0.04,WINTER_COST=0.06;
 const FORAGE_K=0.07;     // nectar per bee per forage point per day
-const MAX_COMB_R=10;
+const MAX_COMB_R=14;      // 631 cells
 const SCOUT_BEES=2,SCOUT_DAYS=3;
 
 const TD={
@@ -88,6 +90,7 @@ function newState(){
         qMode:'normal',newComb:'auto',hmode:'inspect',
         season:'Spring',day:1,year:1,frad:1,
         speed:1,swarm:0,
+        combLvl:0,deepDone:0,deepen:false,_dp:0,
         _bf:0,_df:0,_low:0,_nt:30,_warn:{},
         _totH:0,_peakB:15,_ach:{},
         _wintersS:0,_tilesRestored:0,_stagePrev:1,_colonyName:'',
@@ -97,7 +100,7 @@ function newState(){
     };
 }
 let G=newState();
-const TRANSIENT=['view','sel','_dt','cams','paused'];
+const TRANSIENT=['view','sel','_dt','cams','paused','ctab'];
 const SPEEDS=[0.5,1,2,4];
 const SK='apiary_v6';
 function save(){try{const o={};Object.keys(G).forEach(k=>{if(!TRANSIENT.includes(k))o[k]=G[k];});localStorage.setItem(SK,JSON.stringify(o));}catch(e){}}
@@ -132,7 +135,21 @@ function hasWater(t){return nbrs(t.q,t.r).some(([q,r])=>{const n=G.tiles[hkey(q,
 
 // ── COMB ──────────────────────────────────────────────────────────────────────
 function combCount(t){let n=0;for(const c of Object.values(G.comb))if(c.t===t)n++;return n;}
-function capacity(){return combCount('s')*CELL_CAP;}
+function cellCapAt(l){return DEEP_CAPS[clamp(l|0,0,DEEP_CAPS.length-1)];}
+function deepening(){return !!G.deepen&&(G.combLvl||0)<DEEP_CAPS.length-1&&combCount('s')>0;}
+// storage cells already deepened to the next level hold the bigger amount
+function capacity(){
+    const n=combCount('s'),l=G.combLvl||0;if(!n)return 0;
+    const bonus=l<DEEP_CAPS.length-1?Math.min(G.deepDone||0,n)*(cellCapAt(l+1)-cellCapAt(l)):0;
+    return n*cellCapAt(l)+bonus;
+}
+function perCell(){const n=combCount('s');return n?capacity()/n:cellCapAt(G.combLvl);}
+// the storage cell closest to the centre that sits nearer than distance d (for tidying brood inward)
+function innerStorage(d){
+    let best=null,bd=d;
+    for(const[k,c]of Object.entries(G.comb)){if(c.t!=='s')continue;const kd=kdist(k);if(kd<bd||(kd===bd&&best&&k<best)){bd=kd;best=k;}}
+    return bd<d?best:null;
+}
 function broodStats(){
     let eggs=0,larvae=0,capped=0,empty=0,dead=0,total=0;
     for(const c of Object.values(G.comb)){
@@ -177,11 +194,14 @@ function econ(){
     const fedLarvae=Math.min(bs.larvae,nurseCap);
     const larvaCost=fedLarvae*LARVA_COST;
     const canBuild=!!nextFrontier();
-    const buildRate=canBuild?G.builders*BUILD_RATE:0;
-    const buildCost=buildRate*CELL_COST;
+    const dpg=deepening();
+    const deepRate=dpg&&!winter?G.builders*DEEP_RATE:0;
+    const deepCost=dpg?DEEP_COST[G.combLvl]:0;
+    const buildRate=(!dpg&&canBuild)?G.builders*BUILD_RATE:0;
+    const buildCost=buildRate*CELL_COST+deepRate*deepCost;
     const layRate=winter?0:LAY[G.qMode];
     return{nectarIn,procCap,processed,honeyIn,adultCost,larvaCost,buildRate,buildCost,canBuild,
-        net:honeyIn-adultCost-larvaCost-buildCost,bs,nurseCap,fedLarvae,layRate,cap:capacity()};
+        net:honeyIn-adultCost-larvaCost-buildCost,bs,nurseCap,fedLarvae,layRate,cap:capacity(),dpg,deepRate,deepCost};
 }
 function winterNeed(){return Math.ceil(G.bees*0.9*WINTER_COST*SLEN[3]);}
 

@@ -1,5 +1,5 @@
 // Network-first: always try for the newest files, fall back to cache offline.
-const CACHE = 'apiary-v10';
+const CACHE = 'apiary-v11';
 const BASE = self.registration.scope;
 const ASSETS = ['', 'index.html', 'manifest.json', 'phaser.min.js',
     'js/engine.js', 'js/tick.js', 'js/ui.js', 'js/scene.js',
