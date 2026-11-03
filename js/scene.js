@@ -2,16 +2,19 @@
 class BeeManager{
     constructor(s){this.s=s;this.bees=[];this.sig='';}
     sync(force){
-        const sig=JSON.stringify(G.fa);
+        const sig=JSON.stringify(G.hives.map(h=>[h.q,h.r,h.fa]));
         if(!force&&sig===this.sig)return;
         this.sig=sig;this.clear();
-        Object.entries(G.fa).forEach(([k,n])=>{
-            const t=G.tiles[k];if(!t)return;const p=h2p(t.q,t.r);
-            for(let i=0;i<Math.min(n,3);i++){
-                const b=this.s.add.text(0,0,'🐝',{font:'13px serif'}).setOrigin(.5).setDepth(6);
-                Object.assign(b,{_tx:p.x,_ty:p.y,_t:i/3,_dir:1,_amp:5+Math.random()*6,_spd:.004+Math.random()*.003,_off:Math.random()*6});
-                b.setVisible(G.view==='map');this.bees.push(b);
-            }
+        G.hives.forEach(h=>{
+            const hp=h2p(h.q,h.r);
+            Object.entries(h.fa).forEach(([k,n])=>{
+                const t=G.tiles[k];if(!t)return;const p=h2p(t.q,t.r);
+                for(let i=0;i<Math.min(n,3);i++){
+                    const b=this.s.add.text(0,0,'🐝',{font:'13px serif'}).setOrigin(.5).setDepth(6);
+                    Object.assign(b,{_ox:hp.x,_oy:hp.y,_tx:p.x-hp.x,_ty:p.y-hp.y,_t:i/3,_dir:1,_amp:5+Math.random()*6,_spd:.004+Math.random()*.003,_off:Math.random()*6});
+                    b.setVisible(G.view==='map');this.bees.push(b);
+                }
+            });
         });
     }
     update(time){
@@ -22,7 +25,7 @@ class BeeManager{
             if(b._t>=1){b._t=1;b._dir=-1;}if(b._t<=0){b._t=0;b._dir=1;}
             b.setScale(b._dir,1);
             const len=Math.hypot(b._tx,b._ty)||1,nx=-b._ty/len,ny=b._tx/len,w=Math.sin(time*.004+b._off)*b._amp;
-            b.setPosition(b._tx*b._t+nx*w,b._ty*b._t+ny*w);
+            b.setPosition(b._ox+b._tx*b._t+nx*w,b._oy+b._ty*b._t+ny*w);
         });
     }
     clear(){this.bees.forEach(b=>b.destroy());this.bees=[];}
@@ -63,7 +66,7 @@ class GameScene extends Phaser.Scene{
                 this._pinch={d:Phaser.Math.Distance.Between(p1.x,p1.y,p2.x,p2.y),z:this.cam.zoom,w:this.cam.getWorldPoint(mx,my)};
                 this._down=false;this._paint=false;this._pending=null;return;
             }
-            this._down=true;this._moved=false;this._sx=this.cam.scrollX;this._sy=this.cam.scrollY;this._px=p.x;this._py=p.y;
+            this._aw=false;this._down=true;this._moved=false;this._sx=this.cam.scrollX;this._sy=this.cam.scrollY;this._px=p.x;this._py=p.y;
             this._paint=G.view==='hive'&&G.hmode!=='inspect';this._last=null;
             // don't paint yet — a second finger may be coming (two-finger move)
             this._pending=this._paint?{x:p.x,y:p.y}:null;
@@ -122,6 +125,12 @@ class GameScene extends Phaser.Scene{
         const x=clamp(c.scrollX+c.width/2,-lim,lim),y=clamp(c.scrollY+c.height/2,-lim,lim);
         c.setScroll(x-c.width/2,y-c.height/2);
     }
+    focusHive(){
+        const h=H();this.clearHl();
+        if(G.view==='hive')this.fitHive();
+        else if(G.view==='map'){const p=h2p(h.q,h.r);this.cam.centerOn(p.x,p.y);this.clampCam();}
+        this.refresh();
+    }
     zoomBy(d){this.setZoom(this.cam.zoom*(d>0?1.25:.8));}
     fitHive(){
         let R=1;Object.keys(G.comb).forEach(k=>R=Math.max(R,kdist(k)));R+=1;
@@ -144,6 +153,11 @@ class GameScene extends Phaser.Scene{
         }
         if(G.view!=='map')return;
         const{q,r}=p2h(wp.x,wp.y),k=hkey(q,r);
+        if(G.placing){
+            const err=siteError(k);
+            if(err){toast(err,'warn');return;}
+            this.hl(q,r,SZ);openSel({kind:'place',k});return;
+        }
         if(G.tiles[k]){this.hl(q,r,SZ);openSel({kind:'tile',k});}
         else if(G.fog[k]){this.hl(q,r,SZ);openSel({kind:'fog',k});}
         else closePanel();
@@ -151,6 +165,7 @@ class GameScene extends Phaser.Scene{
     paintAt(p){
         const wp=this.cam.getWorldPoint(p.x,p.y);
         const{q,r}=p2h(wp.x,wp.y,HS),k=hkey(q,r);
+        if(G.qMode==='auto'){if(!this._aw){this._aw=true;toast('Auto queen manages the cells. Switch her to a manual mode to paint.','info');}return;}
         if(k===this._last||!G.comb[k])return;this._last=k;
         if(setCell(k,G.hmode,true)){hap(8);this.drawHive();}
     }
@@ -187,9 +202,13 @@ class GameScene extends Phaser.Scene{
             else if(t.type==='CLOVER'){const n=s>=2?3:s>=1?2:1;[[0,-4],[-10,7],[10,7]].slice(0,n).forEach(([dx,dy])=>{g.fillStyle(0xe8e8f0,.9);[[0,-3],[-3,2],[3,2]].forEach(([a,b])=>g.fillCircle(x+dx+a,y+dy+b,2.6));});}
             else if(t.type==='WILDFLOWER'){const pts=[[0,0,0xe85090],[-12,6,0xf0c030],[12,6,0xa070e0],[-6,-10,0xf0f0f0],[8,-9,0xe85090]];pts.slice(0,s+2).forEach(([dx,dy,c])=>{g.fillStyle(c,.9);g.fillCircle(x+dx,y+dy,3);});}
             else if(t.type==='FOREST'){[-9,0,9].slice(0,s+1).forEach(dx=>{g.fillStyle(0x1e6a2a,1);g.fillTriangle(x+dx,y-12,x+dx-7,y+6,x+dx+7,y+6);});}
-            if(t.type==='HIVE_BOX'){g.fillStyle(0xf0b030,1);g.fillCircle(x,y,9);g.lineStyle(2.5,0xffe080,1);g.strokeCircle(x,y,13);}
+            if(t.type==='HIVE_BOX'){
+                const me=H(),act=t.q===me.q&&t.r===me.r;
+                g.fillStyle(act?0xf0b030:0xb88a28,1);g.fillCircle(x,y,9);g.lineStyle(act?3:1.5,act?0xffe080:0xa08040,1);g.strokeCircle(x,y,13);
+            }
             else if(!ok){g.fillStyle(0x000000,.45);this.hex(g,x,y,SZ);g.fillPath();}
             else if(d.forage||t.type==='DEAD_ZONE'){g.lineStyle(1.5,0xe09a18,.35);this.hex(g,x,y,SZ-3);g.strokePath();}
+            if(G.placing&&!siteError(k)){g.fillStyle(0x60e080,.2);this.hex(g,x,y,SZ);g.fillPath();g.lineStyle(3,0x60e080,.95);this.hex(g,x,y,SZ-2);g.strokePath();}
         });
     }
     drawLabels(){

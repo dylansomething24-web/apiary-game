@@ -17,8 +17,15 @@ const NURSE_CAP=4;       // larvae one nurse can feed
 const LARVA_COST=0.04;   // lb honey per larva per day
 const ADULT_COST=0.04,WINTER_COST=0.06;
 const FORAGE_K=0.07;     // nectar per bee per forage point per day
-const MAX_COMB_R=14;      // 631 cells
+const MAX_COMB_R=12;      // 469 cells
 const SCOUT_BEES=2,SCOUT_DAYS=3;
+const TILE_SLOTS=[8,12,16,20];   // foragers one tile can feed per day, by health stage (all hives together)
+const DIST_LOSS=0.08;    // each tile beyond the first costs a forager 8% of its load (flight effort)
+const PA_RATE=1.0;       // % of a dead zone one pollinator restores per day
+const HEAL_RATE=0.006;   // daily chance per forager that its tile improves a stage
+const SPLIT_REACH=3,SPLIT_MINDIST=2,SPLIT_MAXDIST=4,SPLIT_MIN_BEES=150,SPLIT_SHARE=0.4,SPLIT_HONEY=0.3,MAX_HIVES=6;
+const AUTO_LAY={Spring:'overdrive',Summer:'normal',Fall:'conserve',Winter:'conserve'};
+const SITE_TYPES=['WILDFLOWER','FOREST','CLOVER','SUNFLOWER'];
 
 const TD={
     WILDFLOWER:{label:'Wildflower Meadow',forage:3,fill:[0x3a3222,0x4a5a2c,0x5a8a36,0x6cae44],desc:'Mixed blooms. Reliable all season and quick to heal.'},
@@ -79,35 +86,49 @@ function makeComb(){
 }
 
 // ── STATE ─────────────────────────────────────────────────────────────────────
+// Everything that belongs to one hive lives on a hive object. G exposes the ACTIVE hive's fields
+// (G.bees, G.honey, G.comb ...) through accessors, so the rest of the code reads like one hive.
+function makeHive(q,r,name,id){
+    return{id,q,r,name,
+        bees:15,honey:10,nectar:0,nurses:3,processors:2,builders:1,guards:0,
+        fa:{},pa:{},scouts:[],comb:makeComb(),qMode:'normal',newComb:'auto',swarm:0,frad:1,
+        combLvl:0,deepDone:0,deepen:false,_dp:0,_bf:0,_df:0,_low:0,_warn:{},
+        _nIn:0,_hIn:0,_born:0,_died:0,_wW:false,_w82:false,_wasLow:false};
+}
+const HFIELDS=Object.keys(makeHive(0,0,'',0)).filter(k=>!['id','q','r','name'].includes(k));
+function bindHive(g){
+    HFIELDS.forEach(k=>Object.defineProperty(g,k,{get(){return this.hives[this.ci][k];},set(v){this.hives[this.ci][k]=v;},enumerable:false,configurable:true}));
+    return g;
+}
 function newState(){
     const tiles=makeMap();
     const start=Object.keys(tiles).filter(k=>tiles[k].stage===1&&TD[tiles[k].type].forage).sort((a,b)=>TD[tiles[b].type].forage-TD[tiles[a].type].forage)[0];
-    return{
-        bees:15,honey:10,nectar:0,
-        nurses:3,processors:2,builders:1,guards:0,
-        fa:start?{[start]:8}:{},pa:{},restore:{},scouts:[],
-        tiles,fog:makeFog(tiles),comb:makeComb(),
-        qMode:'normal',newComb:'auto',hmode:'inspect',
-        season:'Spring',day:1,year:1,frad:1,
-        speed:1,swarm:0,
-        combLvl:0,deepDone:0,deepen:false,_dp:0,
-        _bf:0,_df:0,_low:0,_nt:30,_warn:{},
-        _totH:0,_peakB:15,_ach:{},
+    const home=makeHive(0,0,'Home hive',1);
+    if(start)home.fa={[start]:8};
+    return bindHive({
+        tiles,fog:makeFog(tiles),restore:{},
+        hives:[home],ci:0,_hid:1,
+        hmode:'inspect',
+        season:'Spring',day:1,year:1,speed:1,
+        _nt:30,_totH:0,_peakB:15,_ach:{},
         _wintersS:0,_tilesRestored:0,_stagePrev:1,_colonyName:'',
-        _wW:false,_w82:false,_wasLow:false,
-        _nIn:0,_hIn:0,_born:0,_died:0,
         view:'map',sel:null,_dt:0,cams:{},
-    };
+    });
 }
 let G=newState();
-const TRANSIENT=['view','sel','_dt','cams','paused','ctab'];
+const TRANSIENT=['view','sel','_dt','cams','paused','ctab','placing'];
 const SPEEDS=[0.5,1,2,4];
 const SK='apiary_v6';
 function save(){try{const o={};Object.keys(G).forEach(k=>{if(!TRANSIENT.includes(k))o[k]=G[k];});localStorage.setItem(SK,JSON.stringify(o));}catch(e){}}
 function load(){
     try{const raw=localStorage.getItem(SK);if(!raw)return false;
         const o=JSON.parse(raw);const base=newState();
-        G=Object.assign(base,o);G.view='map';G.sel=null;G._dt=0;G.cams={};
+        // an old single-hive save has bees/comb/... at the top level; the accessors drop them into the home hive
+        G=Object.assign(base,o);
+        G.hives=G.hives.map(h=>Object.assign(makeHive(h.q,h.r,h.name,h.id),h));
+        if(!(G.ci>=0&&G.ci<G.hives.length))G.ci=0;
+        G._hid=Math.max(G._hid||1,...G.hives.map(h=>h.id));
+        G.view='map';G.sel=null;G._dt=0;G.cams={};G.placing=false;
         return true;
     }catch(e){return false;}
 }
@@ -124,12 +145,26 @@ function seasonOf(d){let n=d,i=0;while(i<3&&n>SLEN[i]){n-=SLEN[i];i++;}return SE
 function dayInSeason(d){let n=d,i=0;while(i<3&&n>SLEN[i]){n-=SLEN[i];i++;}return n;}
 function seasonStart(s){let st=1;for(let i=0;i<SEASONS.indexOf(s);i++)st+=SLEN[i];return st;}
 function seasonMult(){return{Spring:1,Summer:1.2,Fall:.6,Winter:0}[G.season];}
-function inRange(t){return hdist(t.q,t.r)<=G.frad;}
+function H(){return G.hives[G.ci];}
+function hiveDist(t,h){h=h||H();return hdist(t.q,t.r,h.q,h.r);}
+function inRange(t){return hiveDist(t)<=G.frad;}
+function totalBees(){return G.hives.reduce((a,h)=>a+h.bees,0);}
+let _ctx=null;   // name of the hive being processed, so toasts can say which one
+function withHive(h,fn){
+    const i=G.hives.indexOf(h);if(i<0)return;
+    const pv=G.hives[G.ci],pc=_ctx;G.ci=i;_ctx=G.hives.length>1?h.name:null;
+    try{return fn();}finally{G.ci=Math.max(0,G.hives.indexOf(pv));_ctx=pc;}
+}
+function tileForagers(k){let n=0;for(const h of G.hives)n+=h.fa[k]||0;return n;}
+function tileSlots(k){const t=G.tiles[k];return t?TILE_SLOTS[t.stage]:0;}
 function guardsNeeded(){return Math.max(2,Math.ceil(G.bees/30));}
+// nectar one forager of the ACTIVE hive brings from tile k: flight cost by distance, shared by everyone on the tile
 function tileYield(k){
     const t=G.tiles[k];if(!t)return 0;const d=TD[t.type];if(!d.forage)return 0;
     const water=nbrs(t.q,t.r).some(([q,r])=>{const n=G.tiles[hkey(q,r)];return n&&n.type==='WATER';});
-    return d.forage*STAGE_MULT[t.stage]*FORAGE_K*seasonMult()*(water?1.1:1);
+    const flight=Math.max(.4,1-DIST_LOSS*(Math.max(1,hiveDist(t))-1));
+    const tot=tileForagers(k),slots=tileSlots(k),crowd=tot>slots?slots/tot:1;
+    return d.forage*STAGE_MULT[t.stage]*FORAGE_K*seasonMult()*(water?1.1:1)*flight*crowd;
 }
 function hasWater(t){return nbrs(t.q,t.r).some(([q,r])=>{const n=G.tiles[hkey(q,r)];return n&&n.type==='WATER';});}
 
@@ -172,7 +207,16 @@ function nextFrontier(){
     }
     return best;
 }
+// the laying mode actually in force (Auto follows the seasons)
+function effMode(){return G.qMode==='auto'?AUTO_LAY[G.season]:G.qMode;}
+function layNow(){return G.season==='Winter'?0:LAY[effMode()];}
+// Auto queen: brood cells she can use = the most she can fill in one 21-day cycle, plus a few spare
+function autoBroodTarget(){
+    const rate=layNow();if(!rate)return 0;
+    return Math.min(rate*21+4,Math.floor((Object.keys(G.comb).length-1)*0.75));
+}
 function newCellType(){
+    if(G.qMode==='auto')return's';
     if(G.newComb!=='auto')return G.newComb;
     // give the queen room for a full 21-day cycle, unless honey has nowhere to go
     const fill=(G.honey+G.nectar)/Math.max(1,capacity());
@@ -199,7 +243,7 @@ function econ(){
     const deepCost=dpg?DEEP_COST[G.combLvl]:0;
     const buildRate=(!dpg&&canBuild)?G.builders*BUILD_RATE:0;
     const buildCost=buildRate*CELL_COST+deepRate*deepCost;
-    const layRate=winter?0:LAY[G.qMode];
+    const layRate=layNow();
     return{nectarIn,procCap,processed,honeyIn,adultCost,larvaCost,buildRate,buildCost,canBuild,
         net:honeyIn-adultCost-larvaCost-buildCost,bs,nurseCap,fedLarvae,layRate,cap:capacity(),dpg,deepRate,deepCost};
 }
@@ -266,19 +310,20 @@ function onStageAdvance(stage){
 
 // ── MILESTONES ────────────────────────────────────────────────────────────────
 const MS=[
-    {id:'b30', chk:()=>G.bees>=30, msg:'Colony growing — 30 bees'},
-    {id:'b60', chk:()=>G.bees>=60, msg:'A busy hive — 60 bees'},
-    {id:'b100',chk:()=>G.bees>=100,msg:'One hundred strong — forage range grows'},
-    {id:'b200',chk:()=>G.bees>=200,msg:'The hive is roaring with life'},
-    {id:'c60', chk:()=>Object.keys(G.comb).length>=61,msg:'The comb fills the frame'},
+    {id:'b30', chk:()=>totalBees()>=30, msg:'Colony growing — 30 bees'},
+    {id:'b60', chk:()=>totalBees()>=60, msg:'A busy hive — 60 bees'},
+    {id:'b100',chk:()=>totalBees()>=100,msg:'One hundred strong — forage range grows'},
+    {id:'b200',chk:()=>totalBees()>=200,msg:'The hive is roaring with life'},
+    {id:'c60', chk:()=>G.hives.some(h=>Object.keys(h.comb).length>=61),msg:'The comb fills the frame'},
     {id:'h30', chk:()=>G._totH>=30, msg:'Thirty pounds of honey made'},
     {id:'h150',chk:()=>G._totH>=150,msg:"A season's worth of honey"},
     {id:'s3',  chk:()=>(G._ach._scouted||0)>=3,msg:'Three territories mapped'},
     {id:'w1',  chk:()=>G._wintersS>=1,msg:'First winter — survived'},
     {id:'w2',  chk:()=>G._wintersS>=2,msg:'A second winter endured'},
     {id:'w5',  chk:()=>G._wintersS>=5,msg:'Five winters. The colony endures.'},
+    {id:'hv2', chk:()=>G.hives.length>=2,msg:'A second hive — the colony spreads'},
     {id:'sp',  chk:()=>!!G._ach.sp,msg:'Swarm instinct redirected'},
-    {id:'rcv', chk:()=>G._wasLow&&G.bees>50,msg:'They pulled back from the edge'},
+    {id:'rcv', chk:()=>G.hives.some(h=>h._wasLow&&h.bees>50),msg:'They pulled back from the edge'},
 ];
 function checkMS(){MS.forEach(m=>{if(!G._ach[m.id]&&m.chk()){G._ach[m.id]=true;toast(m.msg,'mile');hap([40,20,40]);}});}
 

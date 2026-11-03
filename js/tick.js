@@ -18,12 +18,46 @@ function tick(){
     if(ns!==G.season){
         const prev=G.season;G.season=ns;flashSeason(ns);
         if(prev==='Winter'){
-            G._wintersS++;G._wW=false;G._w82=false;
+            G._wintersS++;
+            G.hives.forEach(h=>{h._wW=false;h._w82=false;});
             toast('Spring. The queen begins laying again.','green');
         }
         if(ns==='Winter')toast('Winter. No foraging, no laying — the colony lives on stored honey.','warn');
         if(ns==='Fall')toast('Fall. Flowers are thinning. Fill your storage cells before winter.','warn');
     }
+
+    // every hive lives its own day
+    const viewing=G.hives[G.ci];
+    G.hives.slice().forEach(h=>{G.ci=G.hives.indexOf(h);_ctx=G.hives.length>1?h.name:null;hiveDay();});
+    _ctx=null;
+
+    // hives that died
+    G.hives.filter(h=>h.dead).forEach(h=>{
+        const t=G.tiles[hkey(h.q,h.r)];
+        if(t){t.type='WILDFLOWER';t.stage=0;}
+        G.hives.splice(G.hives.indexOf(h),1);
+        if(G.hives.length)toast(`${h.name} has died out. Its bees are gone.`,'warn');
+    });
+    if(!G.hives.length){G.ci=0;collapse();return;}
+    G.ci=Math.max(0,G.hives.indexOf(viewing));
+    if(G.sel&&G.sel.kind==='cell'&&!G.comb[G.sel.k])closePanel();
+
+    G._peakB=Math.max(G._peakB,totalBees());
+
+    // Events strike one hive at random
+    if(--G._nt<=0){
+        G._nt=Math.round((20+~~(Math.random()*20))/Math.sqrt(G.hives.length));
+        if(!(G.year===1&&G.day<20)&&Math.random()<.65){const h=G.hives[~~(Math.random()*G.hives.length)];withHive(h,threat);}
+    }
+
+    const st=getStage();if(st>G._stagePrev){G._stagePrev=st;onStageAdvance(st);}
+    checkMS();Snd.setVol();save();
+    if(window._S){window._S.refresh();if(H()._hIn>0.2&&G.view==='map')window._S.burstForage();}
+    renderAll(true);
+}
+
+// ── ONE HIVE'S DAY (G.* is the hive being processed) ──────────────────────────
+function hiveDay(){
     const e=econ();
 
     // Foragers bring nectar home (only as much as storage can hold)
@@ -53,6 +87,9 @@ function tick(){
         if(c.a<0&&c.p){c.t=c.p;delete c.p;}
     }
     G.bees+=born;G._born=born;
+
+    // Auto queen resizes the brood area for the season
+    tuneBrood();
 
     // Nurses feed larvae (costs honey); unfed larvae die
     const larvaeCells=Object.values(G.comb).filter(c=>c.t==='b'&&!(c.d>0)&&c.a>=3&&c.a<=8);
@@ -95,10 +132,10 @@ function tick(){
 
     // Queen lays into empty brood cells, nearest the centre first
     if(G.season!=='Winter'&&G.honey>0){
-        let n=LAY[G.qMode];
+        let n=layNow();
         const empties=Object.entries(G.comb).filter(([k,c])=>c.t==='b'&&c.a<0&&!(c.d>0)&&!c.p).sort((a,b)=>kdist(a[0])-kdist(b[0]));
         for(const[,c]of empties){if(n<=0)break;c.a=0;n--;}
-        if(n>=LAY[G.qMode]&&G.day>3)warnOnce('lay','The queen has no empty brood cells to lay in. Build comb or paint brood cells.',8);
+        if(n>=layNow()&&G.day>3)warnOnce('lay','The queen has no empty brood cells to lay in. Build comb or paint brood cells.',8);
     }
 
     // Natural deaths
@@ -110,14 +147,13 @@ function tick(){
         warnOnce('starve',`The colony is starving — ${s} bee${s>1?'s':''} died. Get foragers and processors working.`,3);
     }
     G.bees=Math.max(0,G.bees);G._died=died;
-    if(G.bees>G._peakB)G._peakB=G.bees;
     if(G.bees<=20&&G._peakB>30)G._wasLow=true;
 
-    // Swarm pressure: a big, crowded colony wants to split
-    const bs=broodStats();
-    if(G.bees>120&&bs.empty<bs.total*0.1&&(G.season==='Spring'||G.season==='Summer')){
-        G.swarm=Math.min(100,G.swarm+{conserve:.8,normal:2,overdrive:3.5}[G.qMode]);
-        if(G.swarm>=80)warnOnce('swarm','The colony grows restless — swarm pressure is high. Build brood room or prepare a swarm cell.',10);
+    // Swarm pressure: a hive that has outgrown its comb wants to split
+    const cells=Object.keys(G.comb).length;
+    if(G.bees>=120&&G.bees>cells*0.6&&(G.season==='Spring'||G.season==='Summer')){
+        G.swarm=Math.min(100,G.swarm+{conserve:.8,normal:2,overdrive:3.5}[effMode()]);
+        if(G.swarm>=80)warnOnce('swarm',canSplit().ok?'The colony grows restless — split off a new hive (Colony → Queen) or raise a swarm cell.':'The colony grows restless — swarm pressure is high. Raise a swarm cell or build more comb.',10);
     }else G.swarm=Math.max(0,G.swarm-1);
     if(G.swarm>=100){
         const lost=Math.floor(G.bees*.4);G.bees-=lost;G.swarm=0;
@@ -133,21 +169,21 @@ function tick(){
     const bonus=getStage()>=3?1.2:1;
     Object.entries(G.pa).forEach(([k,n])=>{
         const t=G.tiles[k];if(!t||t.type!=='DEAD_ZONE'){delete G.pa[k];return;}
-        G.restore[k]=Math.min(100,(G.restore[k]||0)+n*3.5*bonus);
+        G.restore[k]=Math.min(100,(G.restore[k]||0)+n*PA_RATE*bonus);
         if(G.restore[k]>=100){
             t.type='WILDFLOWER';t.stage=1;delete G.restore[k];delete G.pa[k];G._tilesRestored++;
             toast(`A dead zone stirs back to life — ${n} pollinators come home`,'green');hap([40,20,40,20,40]);Snd.revive();
         }
     });
 
-    // Foraging heals the land
+    // Foraging heals the land (slowly)
     Object.entries(G.fa).forEach(([k,n])=>{
         const t=G.tiles[k];if(!t||t.stage>=3||!TD[t.type].forage)return;
-        if(Math.random()<n*0.012){t.stage++;toast(`${TD[t.type].label} is ${STG[t.stage].toLowerCase()} now — more nectar`,'green');}
+        if(Math.random()<n*HEAL_RATE){t.stage++;toast(`${TD[t.type].label} is ${STG[t.stage].toLowerCase()} now — more nectar`,'green');}
     });
 
     // Forage range follows population
-    const nr=G.bees>=400?3:G.bees>=100?2:1;
+    const nr=G.bees>=250?3:G.bees>=100?2:1;
     if(nr>G.frad){G.frad=nr;toast('The colony’s range extends — more tiles are reachable','green');}
 
     // Winter warnings
@@ -156,15 +192,43 @@ function tick(){
     if(G.day===fs+21&&!G._w82){G._w82=true;if(G.honey<need){toast(`CRITICAL: winter in 4 days — ${(need-G.honey).toFixed(0)} lb short`,'warn');hap([200,100,200]);}}
 
     // Collapse
-    if(G.bees<=2){if(++G._low>=3){collapse();return;}}else G._low=0;
+    if(G.bees<=2){if(++G._low>=3)H().dead=true;}else G._low=0;
+}
 
-    // Events
-    if(--G._nt<=0){G._nt=20+~~(Math.random()*20);if(!(G.year===1&&G.day<20)&&Math.random()<.65)threat();}
-
-    const st=getStage();if(st>G._stagePrev){G._stagePrev=st;onStageAdvance(st);}
-    checkMS();Snd.setVol();save();
-    if(window._S){window._S.refresh();if(G._hIn>0.2&&G.view==='map')window._S.burstForage();}
-    renderAll(true);
+// ── AUTO QUEEN: size the brood area to what she can lay this season ───────────
+// Brood in the middle, honey around the outside. Cells beyond what she needs become storage;
+// when spring comes the innermost storage cells become brood again (as far as the honey allows).
+function tuneBrood(){
+    if(G.qMode!=='auto')return;
+    const target=autoBroodTarget();
+    const brood=[];
+    for(const[k,c]of Object.entries(G.comb))if(c.t==='b'&&!c.p)brood.push(k);
+    const cur=brood.length;
+    if(cur>target){
+        brood.sort((a,b)=>kdist(b)-kdist(a));            // outermost first
+        let extra=cur-target;
+        for(const k of brood){
+            if(extra<=0)break;const c=G.comb[k];
+            if(c.a<0&&!(c.d>0)){G.comb[k]={t:'s',a:-1};}  // empty: becomes storage now
+            else c.p='s';                                  // busy: becomes storage after it hatches
+            extra--;
+        }
+    }else if(cur<target){
+        let need=target-cur;
+        // cells that were about to turn into storage can stay brood
+        const pend=Object.keys(G.comb).filter(k=>G.comb[k].t==='b'&&G.comb[k].p).sort((a,b)=>kdist(a)-kdist(b));
+        for(const k of pend){if(need<=0)break;delete G.comb[k].p;need--;}
+        if(need>0){
+            const store=Object.keys(G.comb).filter(k=>G.comb[k].t==='s').sort((a,b)=>kdist(a)-kdist(b));
+            let cap=capacity();const pc=perCell();
+            for(const k of store){
+                if(need<=0)break;
+                if(G.honey+G.nectar+2>cap-pc)break;       // the honey has to fit in what is left
+                G.comb[k]={t:'b',a:-1};cap-=pc;need--;
+            }
+            if(need>0&&G.season!=='Winter')warnOnce('autoroom','The queen wants more brood room, but the honey stores are in the way.',10);
+        }
+    }
 }
 
 // ── EVENTS ────────────────────────────────────────────────────────────────────
@@ -223,7 +287,7 @@ function diseasedFlower(){
     showChoice({icon:'🥀',title:'Diseased Flowers',
         body:`Scouts report blight in the ${TD[t.type].label}.`,
         a:{label:'Recall foragers',hint:'Tile loses health',fn:()=>{delete G.fa[k];t.stage=Math.max(0,t.stage-1);toast('Foragers recalled — the field will need time','warn');}},
-        b:{label:'Keep foraging',hint:'Some bees get sick',fn:()=>{const l=Math.max(1,Math.ceil(G.fa[k]*.3));G.bees-=l;t.stage=Math.max(0,t.stage-1);rebalance();toast(`${l} foragers got sick and died`,'warn');}},
+        b:{label:'Keep foraging',hint:'Some bees get sick',fn:()=>{const l=Math.max(1,Math.ceil((G.fa[k]||0)*.3));G.bees-=l;t.stage=Math.max(0,t.stage-1);rebalance();toast(`${l} foragers got sick and died`,'warn');}},
     });
 }
 
@@ -246,7 +310,7 @@ function revealTile(k){
     toast(`Scouts found a ${TD[type].label}`,'green');
 }
 
-// ── COLLAPSE ──────────────────────────────────────────────────────────────────
+// ── COLLAPSE (the last hive has died) ─────────────────────────────────────────
 function collapse(){
     const set=(id,v)=>document.getElementById(id).textContent=v;
     set('gm-year',`Year ${G.year}, ${G.season}`);set('gm-peak',G._peakB);set('gm-honey',G._totH.toFixed(0)+' lb');
@@ -258,10 +322,61 @@ function collapse(){
 // ── QUEEN ─────────────────────────────────────────────────────────────────────
 function setQueenMode(m){
     if(getStage()<2){toast('Laying modes unlock after your first winter','warn');return;}
-    G.qMode=m;toast({conserve:'She lays with restraint — 2 eggs a day.',normal:'Her natural pace — 4 eggs a day.',overdrive:'She lays relentlessly — 7 eggs a day.'}[m],'green');
+    if(m==='auto'&&G.hives.length<2){toast('Auto laying unlocks when you found a second hive','warn');return;}
+    G.qMode=m;
+    toast({auto:'The queen follows the seasons — hard in spring, steady in summer, light in fall, resting in winter. She keeps only the brood room she needs.',conserve:'She lays with restraint — 2 eggs a day.',normal:'Her natural pace — 4 eggs a day.',overdrive:'She lays relentlessly — 7 eggs a day.'}[m],'green');
 }
 function prepSwarm(){
     if(G.honey<5){toast('Need 5 lb of honey to raise a swarm cell','warn');return;}
     G.honey-=5;G.swarm=Math.max(0,G.swarm-45);G._ach.sp=true;
     toast('Swarm cell raised — the colony settles','green');
+}
+
+// ── SPLITTING INTO A NEW HIVE ─────────────────────────────────────────────────
+function canSplit(){
+    if(G.hives.length>=MAX_HIVES)return{ok:false,reason:`The land can hold ${MAX_HIVES} hives at most`};
+    if(G.frad<SPLIT_REACH)return{ok:false,reason:`Needs a forage range of ${SPLIT_REACH} tiles (yours is ${G.frad})`};
+    if(G.season!=='Spring'&&G.season!=='Summer')return{ok:false,reason:'Colonies only swarm in spring and summer'};
+    if(G.bees<SPLIT_MIN_BEES)return{ok:false,reason:`Needs at least ${SPLIT_MIN_BEES} bees (you have ${G.bees})`};
+    return{ok:true};
+}
+// null if tile k can take a new hive from the active hive, otherwise why not
+function siteError(k){
+    const t=G.tiles[k],h=H();
+    if(!t)return'Unexplored land — scout it first';
+    if(t.type==='HIVE_BOX')return'There is already a hive here';
+    if(!SITE_TYPES.includes(t.type))return`Bees can’t settle on ${TD[t.type].label.toLowerCase()}`;
+    const d=hiveDist(t,h);
+    if(d<SPLIT_MINDIST)return`Too close — a new hive needs to be at least ${SPLIT_MINDIST} tiles away`;
+    if(d>SPLIT_MAXDIST)return`Too far — a swarm only flies ${SPLIT_MAXDIST} tiles`;
+    if(G.hives.some(o=>o!==h&&hdist(t.q,t.r,o.q,o.r)<SPLIT_MINDIST))return'Too close to another hive';
+    return null;
+}
+function splitPlan(){
+    const n=Math.floor(G.bees*SPLIT_SHARE);
+    return{n,honey:G.honey*SPLIT_HONEY,nectar:G.nectar*SPLIT_HONEY};
+}
+function doSplit(k){
+    const c=canSplit();if(!c.ok){toast(c.reason,'warn');return false;}
+    const err=siteError(k);if(err){toast(err,'warn');return false;}
+    const t=G.tiles[k],parent=H(),plan=splitPlan();
+    // the new hive
+    const id=++G._hid;
+    const nh=makeHive(t.q,t.r,`Hive ${G.hives.length+1}`,id);
+    nh.bees=plan.n;nh.honey=plan.honey;nh.nectar=plan.nectar;
+    nh.nurses=Math.max(2,Math.round(plan.n*.12));nh.processors=Math.max(1,Math.round(plan.n*.08));nh.builders=Math.max(1,Math.round(plan.n*.05));
+    nh.qMode='auto';nh.frad=plan.n>=100?2:1;
+    // the old hive
+    parent.bees-=plan.n;parent.honey-=plan.honey;parent.nectar-=plan.nectar;parent.swarm=0;
+    withHive(parent,rebalance);
+    // the tile becomes a hive; foragers working it have to go
+    t.type='HIVE_BOX';t.stage=3;delete G.restore[k];
+    G.hives.forEach(h=>{delete h.fa[k];delete h.pa[k];});
+    G.hives.push(nh);
+    G._ach.sp=true;
+    withHive(nh,()=>ACT.autoforage());   // give the new hive a working start
+    toast(`A new hive is founded with ${plan.n} bees. Its queen can lay on her own (Auto).`,'mile');hap([60,30,60,30,100]);
+    G.placing=false;G.ci=G.hives.indexOf(nh);
+    closePanel();
+    return true;
 }
