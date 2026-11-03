@@ -1,17 +1,9 @@
-const CACHE = 'apiary-v9';
+// Network-first: always try for the newest files, fall back to cache offline.
+const CACHE = 'apiary-v10';
 const BASE = self.registration.scope;
-const ASSETS = [
-    BASE,
-    BASE + 'index.html',
-    BASE + 'manifest.json',
-    BASE + 'phaser.min.js',
-    BASE + 'js/engine.js',
-    BASE + 'js/tick.js',
-    BASE + 'js/ui.js',
-    BASE + 'js/scene.js',
-    BASE + 'icons/icon-192.png',
-    BASE + 'icons/icon-512.png',
-];
+const ASSETS = ['', 'index.html', 'manifest.json', 'phaser.min.js',
+    'js/engine.js', 'js/tick.js', 'js/ui.js', 'js/scene.js',
+    'icons/icon-192.png', 'icons/icon-512.png'].map(p => BASE + p);
 
 self.addEventListener('install', e => {
     e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)));
@@ -26,7 +18,12 @@ self.addEventListener('activate', e => {
 });
 
 self.addEventListener('fetch', e => {
+    if (e.request.method !== 'GET') return;
     e.respondWith(
-        caches.match(e.request).then(cached => cached || fetch(e.request))
+        fetch(e.request, { cache: 'no-cache' }).then(res => {
+            const copy = res.clone();
+            caches.open(CACHE).then(c => c.put(e.request, copy));
+            return res;
+        }).catch(() => caches.match(e.request, { ignoreSearch: true }))
     );
 });

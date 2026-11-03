@@ -5,183 +5,217 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0a110b">
 <title>The Apiary</title>
 <link rel="manifest" href="manifest.json">
 <style>
-*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
 :root{
-    --bg:#060c06;--amber:#e09a18;--amber-dim:#c8a860;--green:#58c858;
-    --red:#d04040;--warn:#d09020;--muted:#3a5a30;--faint:#1e3a1e;
-    --panel-bg:rgba(4,8,4,.97);--text:#c8a860;
+    --bg:#0a110b;--card:#111b13;--line:#22342a;--line2:#2e4636;
+    --amber:#f0b030;--amber2:#d8b878;--text:#e4dcc4;--muted:#93a48e;--faint:#5c6e5a;
+    --good:#6ad07a;--bad:#ff6a5a;--warn:#f0a830;--blue:#7ab0f0;
     --serif:'Baskerville','Palatino Linotype','Palatino','Book Antiqua','Georgia',serif;
     --mono:'Courier New',Courier,monospace;
 }
-html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:var(--serif);}
-#hud{
-    position:fixed;top:env(safe-area-inset-top,0px);left:0;right:0;z-index:100;
-    background:rgba(4,8,4,.92);border-bottom:1px solid #1e3a1e;
-    padding:6px 14px 4px;
-}
-.hud-row{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;}
-.hud-big{font:italic 1.3rem var(--serif);color:var(--amber);}
-.hud-label{font:10px var(--mono);color:var(--muted);letter-spacing:.04em;}
-.hud-day{font:italic .8rem var(--serif);color:var(--amber-dim);}
-.hud-free{font:10px var(--mono);color:var(--muted);}
-.hud-stage{font:italic .72rem var(--serif);color:var(--muted);padding:2px 6px;border:1px solid #1e3a1e;border-radius:2px;}
-#hud-sub{font:italic .78rem var(--serif);color:var(--muted);min-height:16px;margin-top:2px;}
-#hud-swarm{display:none;height:3px;background:#1a0808;border-radius:2px;margin-top:4px;}
-#hud-swarm-fill{height:100%;background:var(--red);border-radius:2px;width:0%;transition:width .4s;}
-#tabs{
-    position:fixed;bottom:env(safe-area-inset-bottom,0px);left:0;right:0;z-index:100;
-    display:flex;background:rgba(4,8,4,.95);border-top:1px solid #1e3a1e;
-}
-.tab-btn{
-    flex:1;padding:10px 6px 8px;background:none;border:none;
-    font:italic .88rem var(--serif);color:var(--muted);cursor:pointer;
-    border-top:2px solid transparent;transition:color .2s;
-}
-.tab-btn.tab-active{color:var(--amber);border-top-color:var(--amber);}
-#speed-btn{
-    background:none;border:none;color:var(--muted);font:11px var(--mono);
-    padding:10px 14px;cursor:pointer;
-}
-#speed-btn:active{color:var(--amber);}
-#panel{
-    position:fixed;bottom:env(safe-area-inset-bottom,0px);left:0;right:0;z-index:200;
-    background:var(--panel-bg);border-top:1px solid #2a4a2a;
-    max-height:70vh;overflow-y:auto;display:none;
-    transform:translateY(100%);transition:transform .25s ease-out;
-}
-.panel-hdr{
-    display:flex;align-items:center;justify-content:space-between;
-    padding:12px 16px 10px;border-bottom:1px solid #1a2a1a;position:sticky;top:0;
-    background:var(--panel-bg);z-index:1;
-}
-#panel-title{font:italic 1.1rem var(--serif);color:var(--amber);}
-#px{background:none;border:none;color:var(--muted);font:1.1rem/1 var(--mono);cursor:pointer;padding:4px 8px;}
-#panel-body{padding:14px 16px 20px;}
-.stat-box{background:#0a160a;border:1px solid #1e3a1e;border-radius:3px;padding:8px 10px;text-align:center;}
-.stat-n{font:1.15rem var(--mono);color:var(--amber);}
-.stat-l{font:10px var(--mono);color:var(--muted);margin-top:2px;}
-.role-row{display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid #0e1e0e;}
-.pm-wrap{display:flex;align-items:center;gap:8px;}
-.pm-wrap button{
-    width:32px;height:32px;background:#0a160a;border:1px solid #2a4a2a;border-radius:3px;
-    color:var(--amber-dim);font:1.1rem var(--mono);cursor:pointer;line-height:1;
-}
-.pm-wrap button:active{background:#1a2a1a;}
-.act-btn{
-    display:block;width:100%;padding:11px;margin-top:10px;
-    background:#0c1a0c;border:1px solid #2a4a2a;border-radius:3px;
-    color:var(--amber-dim);font:italic .9rem var(--serif);cursor:pointer;text-align:center;
-}
-.act-btn:active{background:#1a2a1a;}
-.ov{
-    position:fixed;inset:0;z-index:500;display:none;
-    align-items:center;justify-content:center;
-    background:rgba(2,5,2,.96);padding:24px;
-}
-.ov-card{
-    background:#080e08;border:1px solid #2a4a2a;border-radius:6px;
-    padding:28px 24px;max-width:360px;width:100%;
-}
-.ov-card h2{font:italic 1.5rem var(--serif);color:var(--amber);margin-bottom:8px;}
-.ov-card p{font:.88rem var(--serif);color:var(--muted);line-height:1.6;margin-bottom:14px;}
-.ov-inp{
-    width:100%;background:#060c06;border:1px solid #2a4a2a;border-radius:3px;
-    color:var(--amber-dim);font:italic .9rem var(--serif);padding:10px 12px;margin-bottom:14px;
-}
-.ov-btn{
-    display:block;width:100%;padding:13px;
-    background:#0e1a0e;border:1px solid #3a6a3a;border-radius:3px;
-    color:var(--amber);font:italic 1rem var(--serif);cursor:pointer;text-align:center;
-    margin-bottom:8px;
-}
-.ov-btn:active{background:#1a2a1a;}
-.ov-btn.danger{border-color:#4a1818;color:var(--red);}
-.ch-icon{font:2.5rem/1 serif;text-align:center;margin-bottom:10px;}
-/* Game over card extras */
-.gm-row{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #0e1e0e;}
-.gm-key{font:.82rem var(--serif);color:var(--muted);}
-.gm-val{font:.82rem var(--mono);color:var(--amber-dim);}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:var(--serif);-webkit-user-select:none;user-select:none;}
+button{font:inherit;color:inherit;touch-action:manipulation;}
+[hidden]{display:none!important;}
+#app{display:flex;flex-direction:column;height:100%;padding-top:env(safe-area-inset-top,0px);}
+
+/* HUD */
+#hud{background:#0d150e;border-bottom:1px solid var(--line);padding:8px 12px 6px;flex:none;}
+.hrow{display:flex;align-items:center;gap:14px;}
+.hstat{display:flex;flex-direction:column;line-height:1.1;}
+.hstat .hl{font:10px var(--mono);letter-spacing:.08em;color:var(--muted);text-transform:uppercase;}
+.hv{font:600 1.15rem var(--mono);color:var(--amber);}
+.hv small{font-size:.7rem;color:var(--muted);font-weight:400;}
+.hv.good{color:var(--good);}.hv.bad{color:var(--bad);}
+.hrow2{display:flex;align-items:center;gap:8px;margin-top:6px;}
+#h-date{font:italic .9rem var(--serif);}
+#h-stage{font:10px var(--mono);color:var(--muted);border:1px solid var(--line2);border-radius:10px;padding:2px 8px;}
+#speed-btn{margin-left:auto;background:#162218;border:1px solid var(--line2);border-radius:6px;padding:4px 12px;font:600 .85rem var(--mono);color:var(--amber);}
+.alert{margin-top:6px;font-size:.82rem;line-height:1.3;padding:6px 9px;border-radius:6px;height:3.25em;overflow:hidden;display:flex;align-items:center;}
+button:disabled{opacity:.35;}
+.a-ok{background:#101a12;color:var(--faint);font-style:italic;}
+.a-bad{background:#3a1410;color:#ffb0a4;}.a-warn{background:#33260c;color:#ffd890;}.a-info{background:#14241a;color:#b8d8b8;}
+
+/* Main area */
+#main{flex:1;position:relative;overflow:hidden;}
+#game{position:absolute;inset:0;}
+#colony{position:absolute;inset:0;overflow-y:auto;-webkit-overflow-scrolling:touch;background:var(--bg);padding:12px 12px 24px;display:flex;flex-direction:column;gap:12px;}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px;}
+.card h3{font:italic 1.1rem var(--serif);color:var(--amber);margin-bottom:8px;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;}
+.card h3 .sub{font:12px var(--mono);color:var(--muted);font-style:normal;}
+.kv{display:flex;justify-content:space-between;gap:10px;padding:4px 0;font-size:.92rem;}
+.kv span{color:var(--muted);}.kv b{font:600 .92rem var(--mono);color:var(--text);text-align:right;}
+.ledger{margin-top:8px;border-top:1px solid var(--line);padding-top:6px;}
+.ledger div{display:flex;justify-content:space-between;font-size:.88rem;padding:2px 0;color:var(--muted);}
+.ledger b{font:600 .88rem var(--mono);}
+.ledger .tot{border-top:1px solid var(--line);margin-top:4px;padding-top:6px;color:var(--text);}
+.good{color:var(--good)!important;}.bad{color:var(--bad)!important;}.warn{color:var(--warn)!important;}
+.row{padding:10px 0;border-top:1px solid var(--line);}
+.card h3+.row,.card .row:first-of-type{border-top:none;}
+.row-top{display:flex;justify-content:space-between;align-items:baseline;}
+.rname{font-size:1rem;}
+.rnum{font:700 1.3rem var(--mono);color:var(--amber);}
+.rdesc{font-size:.84rem;color:var(--muted);line-height:1.35;margin:3px 0 8px;}
+.steps{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;}
+.steps:has(> :nth-child(2):last-child){grid-template-columns:1fr 1fr;}
+.steps button,.seg button,.wide{min-height:42px;background:#1a281d;border:1px solid var(--line2);border-radius:8px;font:600 .95rem var(--mono);color:var(--amber2);}
+.steps button:active,.seg button:active,.wide:active{background:#2a3e2e;}
+.wide{display:block;width:100%;margin-top:8px;font:italic .95rem var(--serif);color:var(--amber);padding:8px;}
+.wide.ghost{background:transparent;}
+.wide.danger{color:var(--bad);border-color:#5a2a24;background:transparent;}
+.seg{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:6px 0;}
+.seg button{font:italic .9rem var(--serif);}
+.seg button.on{background:#3a2c0e;border-color:var(--amber);color:var(--amber);}
+.hint{font-size:.82rem;color:var(--faint);line-height:1.4;margin-top:6px;}
+.note{font-size:.85rem;color:var(--muted);margin-top:6px;}
+.desc{font-size:.92rem;color:var(--text);line-height:1.45;margin-bottom:8px;}
+.brood-mix{display:flex;gap:12px;font:12px var(--mono);color:var(--muted);margin:2px 0 6px;flex-wrap:wrap;}
+.bar{height:8px;background:#1c2a1e;border-radius:4px;overflow:hidden;margin:4px 0;}
+.bar i{display:block;height:100%;background:var(--amber);}
+.bar.greenbar i{background:var(--good);}.bar.redbar i,.bar.warnbar i{background:var(--bad);}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;}
+.chip{font:11px var(--mono);padding:3px 8px;border-radius:10px;background:#1c2a1e;color:var(--good);}
+.chip.blue{color:var(--blue);}
+
+/* Hive toolbar */
+#hivebar{position:absolute;left:0;right:0;bottom:0;background:rgba(10,17,11,.94);border-top:1px solid var(--line);padding:8px 10px;z-index:5;}
+#hivebar .seg{grid-template-columns:repeat(3,1fr) 44px 44px 52px;margin:0;}
+#hb-hint{font-size:.78rem;color:var(--muted);margin-top:6px;text-align:center;}
+.legend{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;font:10px var(--mono);color:var(--muted);margin-top:5px;}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;vertical-align:-1px;}
+
+/* Panel */
+#panel{position:absolute;left:0;right:0;bottom:0;z-index:10;background:#0e170f;border-top:1px solid var(--line2);border-radius:14px 14px 0 0;max-height:72%;overflow-y:auto;transform:translateY(105%);transition:transform .2s ease-out;box-shadow:0 -8px 24px rgba(0,0,0,.5);}
+#panel.open{transform:translateY(0);}
+.phdr{display:flex;align-items:center;justify-content:space-between;padding:12px 14px 8px;position:sticky;top:0;background:#0e170f;}
+#panel-title{font:italic 1.2rem var(--serif);color:var(--amber);}
+.xbtn{background:#1a281d;border:1px solid var(--line2);border-radius:50%;width:34px;height:34px;color:var(--muted);font-size:1rem;}
+#panel-body{padding:0 14px 18px;}
+
+/* Toasts */
+#toasts{position:absolute;top:8px;left:10px;right:10px;z-index:20;display:flex;flex-direction:column;gap:6px;pointer-events:none;}
+.toast{background:rgba(14,22,15,.97);border:1px solid var(--line2);border-left:3px solid var(--amber2);border-radius:8px;padding:8px 11px;font-size:.88rem;line-height:1.35;color:var(--text);transition:opacity .4s;}
+.toast.out{opacity:0;}
+.t-warn{border-left-color:var(--warn);}.t-green{border-left-color:var(--good);}
+.t-mile{border-left-color:var(--amber);background:rgba(48,34,8,.97);font-style:italic;}
+
+/* Tabs */
+#tabs{display:flex;background:#0d150e;border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0px);flex:none;}
+.tab{flex:1;background:none;border:none;border-top:2px solid transparent;padding:12px 4px 10px;font:italic 1rem var(--serif);color:var(--faint);}
+.tab.on{color:var(--amber);border-top-color:var(--amber);}
+
+/* Overlays */
+.ov{position:fixed;inset:0;z-index:100;display:none;align-items:center;justify-content:center;background:rgba(4,8,5,.9);padding:20px;}
+.ov.show{display:flex;}
+.ov-card{background:#0f1910;border:1px solid var(--line2);border-radius:14px;padding:24px 20px;max-width:380px;width:100%;}
+.ov-card h2{font:italic 1.6rem var(--serif);color:var(--amber);margin-bottom:10px;}
+.ov-card p{font-size:.95rem;color:var(--muted);line-height:1.55;margin-bottom:14px;}
+.ov-inp{width:100%;background:#0a110b;border:1px solid var(--line2);border-radius:8px;color:var(--text);font:italic 1rem var(--serif);padding:11px 12px;margin-bottom:12px;-webkit-user-select:text;user-select:text;}
+.ov-btn{display:block;width:100%;padding:12px;background:#1e2e20;border:1px solid #3e5e44;border-radius:10px;color:var(--amber);font:italic 1.05rem var(--serif);margin-top:8px;text-align:center;}
+.ov-btn small{display:block;font:11px var(--mono);color:var(--muted);font-style:normal;margin-top:3px;}
+.ch-icon{font-size:2.6rem;text-align:center;margin-bottom:6px;}
+.gm-row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--line);font-size:.92rem;color:var(--muted);}
+.gm-row b{font:600 .92rem var(--mono);color:var(--text);}
+.season-flash{position:fixed;inset:0;z-index:90;display:flex;align-items:center;justify-content:center;pointer-events:none;background:rgba(0,0,0,.4);animation:sf 1.6s ease forwards;}
+.season-flash span{font:italic 3rem var(--serif);}
+@keyframes sf{0%{opacity:0}20%{opacity:1}75%{opacity:1}100%{opacity:0}}
 </style>
 </head>
 <body>
+<div id="app">
+    <header id="hud">
+        <div class="hrow">
+            <div class="hstat"><span class="hl">Bees</span><span class="hv" id="h-bees">15</span></div>
+            <div class="hstat"><span class="hl">Honey</span><span class="hv"><span id="h-honey">0</span><small>/<span id="h-cap">0</span> lb</small></span></div>
+            <div class="hstat"><span class="hl">Nectar</span><span class="hv" id="h-nectar">0</span></div>
+            <div class="hstat"><span class="hl">Honey/day</span><span class="hv" id="h-net">+0</span></div>
+        </div>
+        <div class="hrow2">
+            <span id="h-date">Spring · Day 1 · Year 1</span>
+            <span id="h-stage">New Swarm</span>
+            <button id="speed-btn" data-a="speed">1×</button>
+        </div>
+        <div id="h-alert" class="alert a-ok"></div>
+    </header>
 
-<!-- HUD -->
-<div id="hud">
-    <div class="hud-row">
-        <span class="hud-big" id="hud-bees">15</span><span class="hud-label">bees</span>
-        <span class="hud-big" id="hud-honey">0</span><span class="hud-label">lbs honey</span>
-        <span class="hud-big" id="hud-nectar">0</span><span class="hud-label">nectar</span>
-        <span class="hud-stage" id="hud-stage">New Swarm</span>
-    </div>
-    <div class="hud-row" style="margin-top:3px">
-        <span class="hud-day" id="hud-day">Spring · Day 1 · Year 1</span>
-        <span class="hud-free" id="hud-free">13 free · 0 foraging</span>
-        <span style="font:10px var(--mono);color:var(--muted)" id="hud-proc">1 proc</span>
-    </div>
-    <div id="hud-sub"></div>
-    <div id="hud-swarm"><div id="hud-swarm-fill"></div></div>
+    <main id="main">
+        <div id="game"></div>
+        <section id="colony" hidden></section>
+        <div id="hivebar" hidden>
+            <div class="seg">
+                <button data-a="hmode" data-v="inspect">Inspect</button>
+                <button data-a="hmode" data-v="b">Paint brood</button>
+                <button data-a="hmode" data-v="s">Paint storage</button>
+                <button data-a="zoom" data-d="-1">−</button>
+                <button data-a="zoom" data-d="1">+</button>
+                <button data-a="fit">Fit</button>
+            </div>
+            <div id="hb-hint"></div>
+            <div class="legend">
+                <span><i style="background:#f4f0e0"></i>egg</span>
+                <span><i style="background:#f0e6c8"></i>larva</span>
+                <span><i style="background:#b88040"></i>capped</span>
+                <span><i style="background:#2e2014;border:1px solid #6a4a2a"></i>empty brood</span>
+                <span><i style="background:#e8a020"></i>honey</span>
+                <span><i style="background:#8a8a40"></i>nectar</span>
+                <span><i style="background:#1c1a0c;border:2px double #9a8636"></i>empty storage</span>
+            </div>
+        </div>
+        <div id="panel">
+            <div class="phdr"><span id="panel-title"></span><button class="xbtn" data-a="close">✕</button></div>
+            <div id="panel-body"></div>
+        </div>
+        <div id="toasts"></div>
+    </main>
+
+    <nav id="tabs">
+        <button class="tab on" data-a="view" data-v="map">Map</button>
+        <button class="tab" data-a="view" data-v="hive">Hive</button>
+        <button class="tab" data-a="view" data-v="colony">Colony</button>
+    </nav>
 </div>
 
-<!-- TAB BAR -->
-<div id="tabs">
-    <button class="tab-btn tab-active" id="tab-map">Foraging</button>
-    <button class="tab-btn" id="tab-hive">Hive</button>
-    <button id="speed-btn">1×</button>
-</div>
-
-<!-- TILE PANEL -->
-<div id="panel">
-    <div class="panel-hdr">
-        <span id="panel-title">Tile</span>
-        <button id="px">✕</button>
-    </div>
-    <div id="panel-body"></div>
-</div>
-
-<!-- INTRO OVERLAY -->
 <div class="ov" id="ov-i">
     <div class="ov-card">
         <h2>The Apiary</h2>
-        <p>A swarm has found a home. The comb is undrawn, the stores empty. Everything that follows is theirs to build.</p>
+        <p>A swarm has found a home in a land gone quiet. Fifteen bees, a queen, and a little comb.</p>
+        <p><b style="color:var(--amber2)">Map</b>: send foragers to flowers for nectar.<br><b style="color:var(--amber2)">Hive</b>: see the comb and choose where the queen lays.<br><b style="color:var(--amber2)">Colony</b>: give every bee a job.</p>
         <input class="ov-inp" id="col-name-in" placeholder="Name your colony (optional)">
-        <button class="ov-btn" id="begin-btn">Begin</button>
+        <button class="ov-btn" data-a="begin">Begin</button>
     </div>
 </div>
 
-<!-- CHOICE OVERLAY -->
 <div class="ov" id="ov-c">
     <div class="ov-card">
         <div class="ch-icon" id="ch-icon"></div>
-        <h2 id="ch-title">Event</h2>
+        <h2 id="ch-title"></h2>
         <p id="ch-body"></p>
-        <button class="ov-btn" id="ch-a">Choice A</button>
-        <button class="ov-btn" id="ch-b">Choice B</button>
+        <button class="ov-btn" id="ch-a" data-a="choice" data-c="a"></button>
+        <button class="ov-btn" id="ch-b" data-a="choice" data-c="b"></button>
     </div>
 </div>
 
-<!-- GAME OVER OVERLAY -->
 <div class="ov" id="ov-g">
     <div class="ov-card">
         <h2>The Colony Has Fallen</h2>
-        <p id="gm-year" style="font-style:italic;color:var(--amber-dim);margin-bottom:12px"></p>
-        <p style="color:var(--muted);font-size:.85rem;margin-bottom:14px">The comb goes cold. What they built remains in the land.</p>
-        <div id="gm-name" style="font-style:italic;color:var(--amber);margin-bottom:12px;font-size:.95rem"></div>
-        <div class="gm-row"><span class="gm-key">Stage reached</span><span class="gm-val" id="gm-stage">—</span></div>
-        <div class="gm-row"><span class="gm-key">Peak population</span><span class="gm-val" id="gm-peak">—</span></div>
-        <div class="gm-row"><span class="gm-key">Total honey</span><span class="gm-val" id="gm-honey">—</span> lbs</div>
-        <div class="gm-row"><span class="gm-key">Winters survived</span><span class="gm-val" id="gm-winters">—</span></div>
-        <div class="gm-row" style="border:none;margin-bottom:16px"><span class="gm-key">Tiles restored</span><span class="gm-val" id="gm-tiles">—</span></div>
-        <button class="ov-btn" id="new-game-btn">Begin again</button>
+        <p id="gm-year"></p>
+        <p id="gm-name" style="color:var(--amber2);font-style:italic"></p>
+        <div class="gm-row">Stage reached<b id="gm-stage"></b></div>
+        <div class="gm-row">Peak population<b id="gm-peak"></b></div>
+        <div class="gm-row">Honey made<b id="gm-honey"></b></div>
+        <div class="gm-row">Winters survived<b id="gm-winters"></b></div>
+        <div class="gm-row">Dead zones restored<b id="gm-tiles"></b></div>
+        <button class="ov-btn" data-a="restart">Begin again</button>
     </div>
 </div>
 
 <script src="phaser.min.js"></script>
-<script src="js/engine.js?v=1"></script>
-<script src="js/tick.js?v=1"></script>
-<script src="js/ui.js?v=1"></script>
-<script src="js/scene.js?v=1"></script>
+<script src="js/engine.js"></script>
+<script src="js/tick.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/scene.js"></script>
 </body>
 </html>

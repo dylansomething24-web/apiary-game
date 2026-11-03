@@ -1,378 +1,298 @@
-// ── TOAST ─────────────────────────────────────────────────────────────────────
-let _pb=0,_ph=0;
+const $=id=>document.getElementById(id);
+const f1=n=>(Math.round(n*10)/10).toFixed(1);
+const sgn=n=>(n>=0?'+':'−')+f1(Math.abs(n));
+
+// Don't rebuild a screen while a finger is on it (that's what eats taps)
+let _holdUntil=0;
+['pointerdown','pointerup','touchstart','touchend'].forEach(ev=>document.addEventListener(ev,()=>{_holdUntil=performance.now()+450;},true));
+
+// ── TOASTS ────────────────────────────────────────────────────────────────────
 function toast(msg,type='info'){
-    const el=document.createElement('div');
-    const c={info:'#c8a860',warn:'#d09020',green:'#58c858',mile:'#e09a18'}[type]||'#c8a860';
-    const bg=type==='mile'?'rgba(60,40,4,.97)':'rgba(4,8,4,.95)';
-    el.style.cssText=`position:fixed;bottom:${90+_pb}px;left:50%;transform:translateX(-50%);background:${bg};color:${c};padding:10px 18px;border-radius:3px;font:italic .9rem 'Baskerville',Georgia,serif;border:1px solid ${c}44;z-index:800;max-width:82vw;text-align:center;line-height:1.4;pointer-events:none;`;
-    el.textContent=msg;document.body.appendChild(el);
-    _pb+=52;
-    setTimeout(()=>{el.style.transition='opacity .5s';el.style.opacity='0';setTimeout(()=>{el.remove();_pb=Math.max(0,_pb-52);},500);},3200);
+    const box=$('toasts');if(!box)return;
+    const el=document.createElement('div');el.className='toast t-'+type;el.textContent=msg;
+    box.appendChild(el);while(box.children.length>3)box.firstChild.remove();
+    setTimeout(()=>{el.classList.add('out');setTimeout(()=>el.remove(),400);},type==='mile'?5000:3600);
     if(type==='mile')Snd.mile();
 }
 
 // ── CHOICE MODAL ──────────────────────────────────────────────────────────────
-let _pendN=null,_cA=null,_cB=null;
+let _choice=null;
 function showChoice({icon,title,body,a,b}){
-    document.getElementById('ch-icon').textContent=icon||'';
-    document.getElementById('ch-title').textContent=title;
-    document.getElementById('ch-body').textContent=body;
-    document.getElementById('ch-a').textContent=a.label;
-    document.getElementById('ch-b').textContent=b.label;
-    _cA=a.fn;_cB=b.fn;
+    _choice={a:a.fn,b:b.fn};
+    $('ch-icon').textContent=icon||'';$('ch-title').textContent=title;$('ch-body').textContent=body;
+    $('ch-a').innerHTML=`${a.label}<small>${a.hint||''}</small>`;
+    $('ch-b').innerHTML=`${b.label}<small>${b.hint||''}</small>`;
     ovShow('ov-c');
 }
-function doChoice(ab){
-    ovHide('ov-c');
-    if(ab==='a'&&_cA)_cA();
-    if(ab==='b'&&_cB)_cB();
-    _cA=_cB=null;
-    hud();save();if(window._S)window._S.refresh();
+
+// ── ALERTS (most urgent problem, always visible) ──────────────────────────────
+function alerts(e){
+    const out=[];
+    if(G.honey<1&&e.net<0)out.push(['bad','Out of honey — bees are starving. Send foragers and keep processors working.']);
+    if(e.bs.larvae>e.nurseCap)out.push(['bad',`Only ${e.nurseCap} of ${e.bs.larvae} larvae can be fed — add nurses.`]);
+    if(G.season!=='Winter'&&e.bs.empty===0)out.push(G.builders>0&&e.canBuild
+        ?['info','Brood cells are full — the queen waits while builders add comb.']
+        :['warn','No empty brood cells — the queen can’t lay. Add builders or paint brood cells.']);
+    if(G.honey+G.nectar>=e.cap-0.5&&e.nectarIn>0)out.push(['warn','Storage full — add builders or paint storage cells.']);
+    if(G.nectar>4&&e.nectarIn>e.procCap)out.push(['warn','Nectar is piling up — add processors.']);
+    if(G.season==='Fall'&&G.honey<winterNeed())out.push(['warn',`Winter needs ~${winterNeed()} lb honey — you have ${G.honey.toFixed(0)}.`]);
+    if(foragerTotal()===0&&G.season!=='Winter')out.push(['info','No foragers out — tap a flower tile next to the hive, or use Colony → Foragers.']);
+    if(idle()>3&&G.season!=='Winter')out.push(['info',`${idle()} bees are idle — give them work in the Colony tab.`]);
+    if(G.guards<guardsNeeded()&&(G.year-1)*YEAR+G.day>15)out.push(['info',`Guards ${G.guards}/${guardsNeeded()} — raiders can get in.`]);
+    return out;
 }
-document.getElementById('ch-a').addEventListener('click',()=>doChoice('a'));
-document.getElementById('ch-b').addEventListener('click',()=>doChoice('b'));
 
 // ── HUD ───────────────────────────────────────────────────────────────────────
-function hud(){
-    const stage=getStage();
-    document.getElementById('hud-bees').textContent=G.bees;
-    document.getElementById('hud-honey').textContent=~~G.honey;
-    document.getElementById('hud-nectar').textContent=~~G.nectar;
-    const dy=G.day,yr=G.year;
-    document.getElementById('hud-day').textContent=`${G.season} · Day ${doyNum(dy)} · Year ${yr}`;
-    const fo=foragerTotal(),po=pollTotal(),oc=occupied(),fr=free();
-    document.getElementById('hud-free').textContent=`${fr} free · ${fo} foraging · ${po} restoring`;
-    document.getElementById('hud-proc').textContent=`${G.processors} proc`;
-    // Stage badge
-    const sn=STAGE_NAMES[stage]||'New Swarm';
-    document.getElementById('hud-stage').textContent=sn;
-    // Swarm pressure bar
-    const sp=document.getElementById('hud-swarm');
-    if(G.swarm>0){sp.style.display='block';document.getElementById('hud-swarm-fill').style.width=G.swarm+'%';}
-    else sp.style.display='none';
-    // Hive subtext in hive view
-    if(G.view==='hive'){
-        const need=Math.ceil(G.bees/20);
-        document.getElementById('hud-sub').textContent=`Nurses ${G.nurses}/${need} · Brood day ${G.brood}/20 · Guards ${G.guards}`;
-    }else{
-        document.getElementById('hud-sub').textContent='';
+function hud(e){
+    $('h-bees').textContent=G.bees;
+    $('h-honey').textContent=f1(G.honey);
+    $('h-cap').textContent=f1(e.cap);
+    $('h-nectar').textContent=f1(G.nectar);
+    const net=$('h-net');net.textContent=sgn(e.net)+'/day';net.className='hv '+(e.net>=0?'good':'bad');
+    $('h-date').textContent=`${G.season} · Day ${dayInSeason(G.day)} · Year ${G.year}`;
+    $('h-date').style.color=SCOL[G.season];
+    $('h-stage').textContent=STAGE_NAMES[getStage()];
+    $('speed-btn').textContent=G.speed+'×';
+    const al=alerts(e)[0];
+    const a=$('h-alert');
+    if(al){a.textContent=al[1];a.className='alert a-'+al[0];}
+    else{a.textContent='The colony is working well.';a.className='alert a-ok';}
+    a.hidden=false;
+}
+
+// ── ACTIONS (every button in the game goes through here) ──────────────────────
+const ACT={
+    role(d){
+        const r=d.r,delta=+d.d;
+        if(delta>0){const n=Math.min(delta,idle());if(!n){toast('No idle bees — take some off another job first','warn');return;}G[r]+=n;}
+        else G[r]=Math.max(0,G[r]+delta);
+    },
+    fa(d){
+        const k=d.k,delta=+d.d,t=G.tiles[k];
+        if(delta>0){
+            if(!inRange(t)){toast('Too far — the colony needs more bees to reach it','warn');return;}
+            const n=Math.min(delta,idle());if(!n){toast('No idle bees — take some off another job first','warn');return;}
+            G.fa[k]=(G.fa[k]||0)+n;
+        }else{G.fa[k]=Math.max(0,(G.fa[k]||0)+delta);if(!G.fa[k])delete G.fa[k];}
+    },
+    farecall(d){delete G.fa[d.k];},
+    autoforage(){
+        const n=idle();if(!n){toast('No idle bees to send','warn');return;}
+        const best=Object.keys(G.tiles).filter(k=>inRange(G.tiles[k])&&TD[G.tiles[k].type].forage).sort((a,b)=>tileYield(b)-tileYield(a))[0];
+        if(!best){toast('No flowers in range','warn');return;}
+        G.fa[best]=(G.fa[best]||0)+n;toast(`${n} bees sent to the ${TD[G.tiles[best].type].label}`,'green');
+    },
+    pa(d){
+        if(getStage()<2){toast('Pollinators unlock after your first winter','warn');return;}
+        const k=d.k,delta=+d.d,t=G.tiles[k];
+        if(delta>0){
+            if(!inRange(t)){toast('Too far — the colony needs more bees to reach it','warn');return;}
+            const n=Math.min(delta,idle());if(!n){toast('No idle bees','warn');return;}
+            G.pa[k]=(G.pa[k]||0)+n;
+        }else{G.pa[k]=Math.max(0,(G.pa[k]||0)+delta);if(!G.pa[k])delete G.pa[k];}
+    },
+    scout(d){sendScout(d.k);},
+    qmode(d){setQueenMode(d.v);},
+    newcomb(d){G.newComb=d.v;},
+    hmode(d){G.hmode=d.v;if(d.v!=='inspect')closePanel();},
+    zoom(d){if(window._S)window._S.zoomBy(+d.d);},
+    fit(){if(window._S)window._S.fitHive();},
+    cellset(d){setCell(d.k,d.v);},
+    view(d){setView(d.v);},
+    speed(){G.speed=G.speed===1?2:G.speed===2?4:1;},
+    close(){closePanel();},
+    begin(){beginGame();},
+    choice(d){ovHide('ov-c');const f=_choice&&_choice[d.c];_choice=null;if(f)f();},
+    prepswarm(){prepSwarm();},
+    newgame(d,btn){
+        if(btn.dataset.armed){newGame();return;}
+        btn.dataset.armed='1';btn.textContent='Tap again to abandon this colony';
+        setTimeout(()=>{if(btn.isConnected){delete btn.dataset.armed;btn.textContent='Start a new colony';}},3000);
+        return'norender';
+    },
+    restart(){newGame();},
+};
+document.addEventListener('click',ev=>{
+    const b=ev.target.closest('[data-a]');if(!b||b.disabled)return;
+    const f=ACT[b.dataset.a];if(!f)return;
+    Snd._start();Snd.tap();hap(12);
+    const res=f(b.dataset,b);
+    if(res==='norender')return;
+    save();if(window._S)window._S.refresh();renderAll();
+});
+
+function setCell(k,v,quiet){
+    const c=G.comb[k];if(!c||c.t==='q')return false;
+    if(c.t===v){if(c.p){delete c.p;return true;}return false;}
+    if(v==='b'){
+        if(G.honey+G.nectar>(combCount('s')-1)*CELL_CAP){if(!quiet)toast('That storage is full of honey — can’t clear it','warn');return false;}
+        c.t='b';c.a=-1;delete c.p;return true;
     }
+    if(c.a>=0||c.d>0){if(c.p==='s')return false;c.p='s';if(!quiet)toast('This cell will become storage once its bee hatches','info');return true;}
+    c.t='s';delete c.a;c.a=-1;return true;
 }
 
-// ── ROLE MANAGEMENT ───────────────────────────────────────────────────────────
-function role(r,delta){
-    Snd.tap();hap([20]);
-    if(r==='nurses'){
-        const n=clamp(G.nurses+delta,0,G.bees-G.guards-G.processors-foragerTotal()-pollTotal());
-        G.nurses=Math.max(0,n);
-    }else if(r==='guards'){
-        const n=clamp(G.guards+delta,0,G.bees-G.nurses-G.processors-foragerTotal()-pollTotal());
-        G.guards=Math.max(0,n);
-    }else if(r==='processors'){
-        const n=clamp(G.processors+delta,0,G.bees-G.nurses-G.guards-foragerTotal()-pollTotal());
-        G.processors=Math.max(0,n);
-    }
-    hud();fillPanel(G.selKey);save();
-}
-
-function adjPoll(k,delta){
-    if(getStage()<2){toast('Pollinators unlock after surviving first winter','warn');return;}
-    const t=G.tiles[k];
-    if(!t||t.type!=='DEAD_ZONE')return;
-    const cur=G.pa[k]||0;
-    const nxt=clamp(cur+delta,0,cur+free());
-    if(nxt===0){delete G.pa[k];}else{G.pa[k]=nxt;}
-    Snd.tap();hap([20]);hud();fillPanel(k);save();
-}
-function recallPoll(k){
-    delete G.pa[k];
-    toast('Pollinators recalled','green');
-    Snd.tap();hud();fillPanel(k);save();
-}
-function sendForagers(k){
-    const n=_pendN||1;
-    if(n>free()+(G.fa[k]||0)){toast('Not enough free bees','warn');return;}
-    G.fa[k]=(G.fa[k]||0)+n;_pendN=null;
-    toast(`${n} forager${n>1?'s':''} sent`,'green');Snd.tap();hap([20]);
-    hud();fillPanel(k);save();
-    if(window._S)window._S.refresh();
-}
-function recallForagers(k){
-    const n=G.fa[k]||0;
-    delete G.fa[k];
-    toast(`${n} forager${n>1?'s':''} recalled`,'green');Snd.tap();hap([20]);
-    hud();fillPanel(k);save();
-    if(window._S)window._S.refresh();
-}
-function clearDistress(){
-    const n=G._distress.length;
-    if(n===0){toast('No distressed cells','warn');return;}
-    const cost=Math.max(1,~~(n*1.5));
-    if(G.bees-cost<=2){toast('Too few bees to clear cells safely','warn');return;}
-    G.bees-=cost;G._distress=[];
-    toast(`Distressed cells cleared — ${cost} bees lost`,'green');hap([40,20,40]);
-    hud();save();if(window._S)window._S.refresh();
-}
-
-// ── PANEL FILL FUNCTIONS ──────────────────────────────────────────────────────
-function fillPanel(k){
-    if(!k)return;
-    const t=G.tiles[k];
-    if(!t){_fillFogPanel(k);return;}
-    if(t.type==='HIVE_BOX'){_fillHivePanel();return;}
-    if(t.type==='DEAD_ZONE'){_fillDeadPanel(k,t);return;}
-    _fillTilePanel(k,t);
-}
-
-function _fillHivePanel(){
-    const stage=getStage();
-    const need=Math.ceil(G.bees/20);
-    const nurseOk=G.nurses>=need;
-    const winterNeed=Math.ceil(G.bees*0.08*15);
-    const r=document.getElementById('panel-body');
-    const stageName=STAGE_NAMES[stage];
-    const nextDesc=stageNextDesc();
-    const colName=G._colonyName?`<p style="font-style:italic;color:#e09a18;margin:0 0 10px">"${G._colonyName}"</p>`:'';
-    r.innerHTML=`
-    ${colName}
-    <div style="display:flex;justify-content:space-between;margin-bottom:10px">
-        <span style="color:#58c858;font-family:'Courier New',monospace;font-size:.8rem">${stageName}</span>
-        <span style="color:#3a5a30;font-size:.75rem">${G._wintersS} winter${G._wintersS!==1?'s':''} survived</span>
-    </div>
-    <p style="color:#3a5a30;font-size:.75rem;margin:0 0 12px">${nextDesc}</p>
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:14px">
-        <div class="stat-box"><div class="stat-n">${G.bees}</div><div class="stat-l">bees</div></div>
-        <div class="stat-box"><div class="stat-n">${~~G.honey}</div><div class="stat-l">lbs honey</div></div>
-        <div class="stat-box"><div class="stat-n">${free()}</div><div class="stat-l">free</div></div>
-    </div>
-    <div style="margin-bottom:14px">
-        <div class="role-row">
-            <span>Nurses <span style="color:${nurseOk?'#58c858':'#d04040'}">${G.nurses}/${need}</span></span>
-            <div class="pm-wrap"><button onclick="role('nurses',-1)">−</button><button onclick="role('nurses',1)">+</button></div>
-        </div>
-        <div class="role-row">
-            <span>Guards <span style="color:#c8a860">${G.guards}</span></span>
-            <div class="pm-wrap"><button onclick="role('guards',-1)">−</button><button onclick="role('guards',1)">+</button></div>
-        </div>
-        <div class="role-row">
-            <span>Processors <span style="color:#c8a860">${G.processors}</span> <span style="color:#3a5a30;font-size:.75rem">(${~~(G.processors*1.5*.75*10)/10} lbs/day)</span></span>
-            <div class="pm-wrap"><button onclick="role('processors',-1)">−</button><button onclick="role('processors',1)">+</button></div>
-        </div>
-    </div>
-    ${G.season==='Fall'||G.season==='Winter'?`<p style="color:#d09020;font-size:.82rem;margin:0 0 10px">Winter need: ${winterNeed} lbs · Have: ${~~G.honey} lbs</p>`:''}
-    ${G.swarm>0?`<p style="color:#d04040;font-size:.82rem;margin:0 0 6px">Swarm pressure: ${~~G.swarm}%</p>`:''}
-    ${G.swarm>=40?`<button class="act-btn" onclick="prepSwarm()">Prepare swarm cell (−5 lbs honey)</button>`:''}
-    <p style="color:#3a5a30;font-size:.75rem;margin:10px 0 0">Switch to Hive view to manage brood and the queen</p>
-    `;
-}
-
-function _fillTilePanel(k,t){
-    const def=TD[t.type];
-    const dist=hdist(t.q,t.r,0,0);
-    const inRange=dist<=G.frad;
-    const assigned=G.fa[k]||0;
-    const eff={Spring:1.0,Summer:1.15,Fall:0.6,Winter:0}[G.season];
-    let bonus=1;
-    nbrs(t.q,t.r).forEach(([nq,nr])=>{const nt=G.tiles[hkey(nq,nr)];if(nt&&nt.type==='WATER')bonus=1.1;});
-    const rate=def.forage?(def.forage*0.022*eff*bonus).toFixed(3):'0';
-    const r=document.getElementById('panel-body');
-    r.innerHTML=`
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
-        <span style="background:#1a2a1a;padding:3px 8px;border-radius:2px;font:11px 'Courier New',monospace;color:#58c858">${STG[t.stage]||'—'}</span>
-        ${bonus>1?'<span style="color:#78a8d8;font-size:.78rem">+10% water bonus</span>':''}
-    </div>
-    ${def.forage?`<p style="color:#c8a860;margin:0 0 8px">Forage: ${def.forage} · ${rate} nectar/bee/day</p>`:'<p style="color:#3a5a30;margin:0 0 8px">No forage</p>'}
-    <p style="color:#3a5a30;font-size:.8rem;margin:0 0 12px">Distance ${dist} · ${inRange?'In range':'Beyond forage range'}</p>
-    ${!inRange?`<button class="act-btn" onclick="sendScout('${k}',${t.q},${t.r})">Send scouts</button>`:''}
-    ${inRange&&def.forage>0?`
-    ${assigned>0?`
-    <div class="role-row">
-        <span style="color:#e09a18">${assigned} foraging here</span>
-        <div class="pm-wrap">
-            <button onclick="if(G.fa['${k}']>1)G.fa['${k}']--;else delete G.fa['${k}'];hud();fillPanel('${k}');save();if(window._S)window._S.refresh()">−</button>
-            <button onclick="if(free()>0){G.fa['${k}']=(G.fa['${k}']||0)+1;hud();fillPanel('${k}');save();if(window._S)window._S.refresh();}">+</button>
-        </div>
-    </div>
-    <button class="act-btn" onclick="recallForagers('${k}')">Recall all</button>
-    `:`
-    <div class="role-row" style="margin-bottom:8px">
-        <span>Send foragers</span>
-        <div class="pm-wrap">
-            <button onclick="_pendN=Math.max(1,(_pendN||1)-1);document.getElementById('pend-n').textContent=(_pendN||1)">−</button>
-            <span id="pend-n" style="color:#e09a18;min-width:22px;text-align:center;font-family:'Courier New',monospace">${_pendN||1}</span>
-            <button onclick="_pendN=Math.min(free(),(_pendN||1)+1);document.getElementById('pend-n').textContent=(_pendN||1)">+</button>
-        </div>
-    </div>
-    <button class="act-btn" onclick="sendForagers('${k}')">Send foragers</button>
-    `}
-    `:''}
-    `;
-}
-
-function _fillDeadPanel(k,t){
-    const stage=getStage();
-    const prog=G.restore[k]||0;
-    const assigned=G.pa[k]||0;
-    const daysLeft=assigned>0?~~((100-prog)/(assigned*3.5)):null;
-    const locked=stage<2;
-    const r=document.getElementById('panel-body');
-    r.innerHTML=`
-    <p style="color:#3a5a30;margin:0 0 10px;font-size:.85rem">A dead zone. Pollinators can slowly restore it to Wildflower.</p>
-    ${locked?`<p style="color:#d09020;font-size:.82rem;margin:0 0 12px">Pollinators unlock after surviving first winter (Stage 2).</p>`:`
-    <div style="margin-bottom:12px">
-        <div style="display:flex;justify-content:space-between;margin-bottom:4px">
-            <span style="font-size:.8rem;color:#c8a860">Restoration</span>
-            <span style="font:11px 'Courier New',monospace;color:#58c858">${~~prog}%</span>
-        </div>
-        <div style="background:#0a1a0a;height:8px;border-radius:4px">
-            <div style="background:#30a040;height:100%;border-radius:4px;width:${prog}%;transition:width .3s"></div>
-        </div>
-        ${daysLeft!==null?`<p style="color:#3a5a30;font-size:.75rem;margin:4px 0 0">~${daysLeft} days remaining</p>`:''}
-    </div>
-    <div class="role-row">
-        <span>Pollinators <span style="color:#58c858">${assigned}</span></span>
-        <div class="pm-wrap">
-            <button onclick="adjPoll('${k}',-1)">−</button>
-            <button onclick="adjPoll('${k}',1)">+</button>
-        </div>
-    </div>
-    ${assigned>0?`<button class="act-btn" style="margin-top:8px" onclick="recallPoll('${k}')">Recall all pollinators</button>`:''}
-    `}
-    `;
-}
-
-function _fillFogPanel(k){
-    const f=G.fog[k];if(!f)return;
-    const scouting=G.scouts.find(s=>s.k===k);
-    const r=document.getElementById('panel-body');
-    r.innerHTML=`
-    <p style="color:#3a5a30;margin:0 0 12px">Unexplored land. Scouts will map what lies here.</p>
-    ${scouting?`<p style="color:#c8a860;font-style:italic">Scouting… returns in ${scouting.days} day${scouting.days!==1?'s':''}</p>`
-    :`<button class="act-btn" onclick="sendScout('${k}',${f.q},${f.r})">Send scouts</button>`}
-    `;
-}
-
-// ── QUEEN/BROOD/HONEY PANELS (hive view) ─────────────────────────────────────
-function _fillQueenPanel(){
-    const stage=getStage();
-    const locked=stage<2;
-    const modes=['conserve','normal','overdrive'];
-    const descs={
-        conserve:'She lays with restraint. Swarm pressure eases. Growth slows.',
-        normal:'Her natural pace. Balanced growth and swarming risk.',
-        overdrive:'She lays relentlessly. The colony surges. Swarm pressure builds.',
-    };
-    const r=document.getElementById('panel-body');
-    if(locked){
-        r.innerHTML=`<p style="color:#d09020;font-style:italic;margin:0">Queen mode unlocks after surviving the first winter.</p><p style="color:#3a5a30;font-size:.8rem;margin:8px 0 0">The colony is still finding its rhythm.</p>`;
-        return;
-    }
-    const qm={conserve:0.65,normal:1.0,overdrive:1.35}[G.qMode]||1;
-    const proj=~~(G.bees*0.06*qm);
-    r.innerHTML=`
-    <p style="color:#3a5a30;font-size:.8rem;margin:0 0 10px">Swarm pressure: ${~~G.swarm}% · Bees: ${G.bees}</p>
-    <p style="color:#c8a860;font-size:.82rem;margin:0 0 12px">Next hatch: ~${proj} bees (day ${G.brood} of 20)</p>
-    ${modes.map(m=>`
-    <button onclick="setQueenMode('${m}')" style="display:block;width:100%;text-align:left;background:${G.qMode===m?'#1a2a0a':'transparent'};border:1px solid ${G.qMode===m?'#58c858':'#1e3a1e'};color:${G.qMode===m?'#58c858':'#3a5a30'};padding:8px 12px;margin-bottom:6px;border-radius:3px;font:italic .88rem 'Baskerville',Georgia,serif;cursor:pointer">
-        <strong>${m.charAt(0).toUpperCase()+m.slice(1)}</strong><br><span style="font-size:.8rem">${descs[m]}</span>
-    </button>`).join('')}
-    `;
-}
-function _fillBroodPanel(ring){
-    const need=Math.ceil(G.bees/20);
-    const ok=G.nurses>=need;
-    const r=document.getElementById('panel-body');
-    if(G.season==='Winter'){r.innerHTML=`<p style="color:#78a8d8;font-style:italic;margin:0">No new brood is being laid. The queen rests.</p>`;return;}
-    r.innerHTML=`
-    <p style="color:${ok?'#58c858':'#d04040'};margin:0 0 10px">Nurses: ${G.nurses}/${need} — ${ok?'adequate':'insufficient'}</p>
-    <p style="color:#c8a860;font-size:.82rem;margin:0 0 8px">Brood day ${G.brood}/20 · ${ring==='b1'?'Inner ring (6 cells)':'Outer ring (12 cells)'}</p>
-    ${G._distress.length>0?`<p style="color:#d04040;margin:0 0 8px">${G._distress.length} distressed cell${G._distress.length>1?'s':''}</p><button class="act-btn" onclick="clearDistress()">Clear distressed cells</button>`:''}
-    `;
-}
-function _fillHoneyRingPanel(){
-    const HM=Math.max(90,~~(G.bees*.5));
-    const pct=Math.min(100,~~(G.honey/HM*100));
-    const winterNeed=~~(G.bees*0.08*15);
-    const r=document.getElementById('panel-body');
-    r.innerHTML=`
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
-        <div class="stat-box"><div class="stat-n">${~~G.honey}</div><div class="stat-l">lbs stored</div></div>
-        <div class="stat-box"><div class="stat-n">${pct}%</div><div class="stat-l">of ring cap</div></div>
-    </div>
-    <p style="color:#d09020;font-size:.82rem;margin:0 0 6px">Winter need: ${winterNeed} lbs</p>
-    ${G.honey>=winterNeed?`<p style="color:#58c858;font-size:.82rem;margin:0">On track for winter</p>`:`<p style="color:#d04040;font-size:.82rem;margin:0">Short by ${winterNeed-~~G.honey} lbs</p>`}
-    <p style="color:#3a5a30;font-size:.75rem;margin:8px 0 0">Nectar buffer: ${~~G.nectar}/25 lbs · ${G.processors} processor${G.processors!==1?'s':''}</p>
-    `;
-}
-
-// ── PANEL OPEN/CLOSE ──────────────────────────────────────────────────────────
-function openPanel(k){
-    const t=G.tiles[k];if(!t)return;
-    G.selKey=k;G.panelOpen=true;
-    const def=TD[t.type];
-    document.getElementById('panel-title').textContent=def?def.label:'Tile';
-    fillPanel(k);
-    const p=document.getElementById('panel');
-    p.style.display='block';p.style.transform='translateY(0)';
-    Snd.tap();hap([20]);
-}
-function openFogPanel(k,q,r){
-    G.selKey=k;G.panelOpen=true;G.fogPanel={k,q,r};
-    document.getElementById('panel-title').textContent='Unknown Territory';
-    _fillFogPanel(k);
-    const p=document.getElementById('panel');
-    p.style.display='block';p.style.transform='translateY(0)';
-    Snd.tap();
-}
-function openHiveCell(type){
-    G.panelOpen=true;
-    const titles={queen:'The Queen',b1:'Inner Brood Ring',b2:'Outer Brood Ring',honey:'Honey Reserve'};
-    document.getElementById('panel-title').textContent=titles[type]||type;
-    if(type==='queen')_fillQueenPanel();
-    else if(type==='b1'||type==='b2')_fillBroodPanel(type);
-    else if(type==='honey')_fillHoneyRingPanel();
-    const p=document.getElementById('panel');
-    p.style.display='block';p.style.transform='translateY(0)';
-    Snd.tap();hap([20]);
-}
-function closePanel(){
-    G.panelOpen=false;G.selKey=null;G.fogPanel=null;_pendN=null;
-    const p=document.getElementById('panel');
-    p.style.transform='translateY(100%)';
-    setTimeout(()=>{if(!G.panelOpen)p.style.display='none';},300);
-}
-document.getElementById('px').addEventListener('click',closePanel);
-
-// ── VIEW / SPEED ──────────────────────────────────────────────────────────────
+// ── VIEWS ─────────────────────────────────────────────────────────────────────
 function setView(v){
     if(G.view===v)return;
+    if(window._S)window._S.saveCam();
     G.view=v;closePanel();
-    document.getElementById('tab-map').classList.toggle('tab-active',v==='map');
-    document.getElementById('tab-hive').classList.toggle('tab-active',v==='hive');
-    if(window._S){
-        const S=window._S;
-        if(v==='hive'){
-            S.bgG.setVisible(false);S.hvG.setVisible(true);
-            Object.values(S.fTx).forEach(t=>t.setVisible(false));
-            S.cam.setScroll(-S.cam.width/2,-S.cam.height/2);
-            S.drawHive();
+    document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on',t.dataset.v===v));
+    $('colony').hidden=v!=='colony';
+    $('hivebar').hidden=v!=='hive';
+    if(window._S)window._S.showView(v);
+    renderAll();
+}
+
+// ── RENDER ────────────────────────────────────────────────────────────────────
+function renderAll(fromTick){
+    const e=econ();
+    hud(e);
+    if(fromTick&&performance.now()<_holdUntil)return;
+    if(G.view==='colony')renderColony(e);
+    if(G.view==='hive')renderHivebar();
+    if(G.sel)renderPanel(e);
+}
+
+const btn=(label,a,data='',cls='')=>`<button class="${cls}" data-a="${a}" ${data}>${label}</button>`;
+const steps=(a,data,big=true)=>`<div class="steps">${(big?[-5,-1,1,5]:[-1,1]).map(d=>btn((d>0?'+':'−')+Math.abs(d),a,`${data} data-d="${d}"`)).join('')}</div>`;
+const bar=(pct,cls='')=>`<div class="bar ${cls}"><i style="width:${clamp(pct,0,100)}%"></i></div>`;
+
+function roleRow(key,label,desc,status){
+    return`<div class="row"><div class="row-top"><span class="rname">${label}</span><span class="rnum">${G[key]}</span></div>
+    <div class="rdesc ${status||''}">${desc}</div>${steps('role',`data-r="${key}"`)}</div>`;
+}
+
+function renderColony(e){
+    const bs=e.bs,stage=getStage(),gn=guardsNeeded();
+    const fill=(G.honey+G.nectar)/Math.max(1,e.cap)*100;
+    let h='';
+
+    h+=`<section class="card"><h3>Stores</h3>
+    <div class="kv"><span>Honey</span><b>${f1(G.honey)} lb</b></div>
+    <div class="kv"><span>Nectar waiting</span><b>${f1(G.nectar)} lb</b></div>
+    <div class="kv"><span>Storage used</span><b>${f1(G.honey+G.nectar)} / ${f1(e.cap)} lb</b></div>${bar(fill,fill>90?'warnbar':'')}
+    <div class="ledger">
+      <div><span>Processed into honey</span><b class="good">+${f1(e.honeyIn)}</b></div>
+      <div><span>Adult bees eat</span><b class="bad">−${f1(e.adultCost)}</b></div>
+      <div><span>Larvae fed by nurses</span><b class="bad">−${f1(e.larvaCost)}</b></div>
+      <div><span>Wax for new comb</span><b class="bad">−${f1(e.buildCost)}</b></div>
+      <div class="tot"><span>Honey per day</span><b class="${e.net>=0?'good':'bad'}">${sgn(e.net)}</b></div>
+    </div>
+    ${G.season==='Fall'||G.season==='Winter'?`<div class="note ${G.honey>=winterNeed()?'good':'bad'}">Winter needs about ${winterNeed()} lb.</div>`:''}
+    </section>`;
+
+    h+=`<section class="card"><h3>Workers <span class="sub">${G.bees} bees · <b class="${idle()?'warn':''}">${idle()} idle</b></span></h3>
+    ${roleRow('nurses','Nurses',`Feed larvae (honey from stores). Can feed ${e.nurseCap}; ${bs.larvae} larvae now.`,bs.larvae>e.nurseCap?'bad':'good')}
+    ${roleRow('processors','Processors',`Turn nectar into honey: ${f1(e.procCap)} lb nectar/day max → ${f1(e.procCap*PROC_EFF)} lb honey.`,e.nectarIn>e.procCap?'warn':'')}
+    ${roleRow('builders','Builders',e.canBuild?`Draw ${f1(e.buildRate)} new cells/day, using ${f1(e.buildCost)} lb honey as wax.`:'The comb is at full size.','')}
+    ${roleRow('guards','Guards',`Defend the entrance. About ${gn} needed at this size.`,G.guards<gn?'warn':'good')}
+    </section>`;
+
+    const fk=Object.keys(G.fa);
+    h+=`<section class="card"><h3>Foragers <span class="sub">${foragerTotal()} out · ${f1(e.nectarIn)} lb nectar/day</span></h3>
+    ${fk.length?fk.map(k=>{const t=G.tiles[k];return`<div class="row"><div class="row-top"><span class="rname">${TD[t.type].label}</span><span class="rnum">${G.fa[k]}</span></div>
+      <div class="rdesc">${STG[t.stage]} · ${f1(tileYield(k)*G.fa[k])} lb/day${hasWater(t)?' · water bonus':''}</div>${steps('fa',`data-k="${k}"`)}</div>`;}).join(''):'<p class="hint">No foragers yet. Tap a flower tile on the Map, or:</p>'}
+    ${btn(`Send all ${idle()} idle bees to the best flowers`,'autoforage','','wide')}
+    <p class="hint">Flowers within ${G.frad} hex${G.frad>1?'es':''} of the hive can be foraged. Range grows at 100 and 400 bees.</p>
+    </section>`;
+
+    const dz=Object.keys(G.tiles).filter(k=>G.tiles[k].type==='DEAD_ZONE');
+    h+=`<section class="card"><h3>Pollinators <span class="sub">${pollTotal()} restoring</span></h3>`;
+    if(stage<2)h+=`<p class="hint">Locked until your colony survives its first winter. Then pollinators can bring dead zones back to life.</p>`;
+    else if(!dz.length)h+=`<p class="hint">No dead zones on your land.</p>`;
+    else h+=dz.map(k=>{const t=G.tiles[k],ok=inRange(t),p=G.restore[k]||0,n=G.pa[k]||0;
+        return`<div class="row"><div class="row-top"><span class="rname">Dead Zone ${hdist(t.q,t.r)} hex out</span><span class="rnum">${n}</span></div>
+        ${bar(p,'greenbar')}<div class="rdesc">${ok?(n?`${~~p}% · about ${Math.ceil((100-p)/(n*3.5))} days left`:`${~~p}% restored`):'Out of range'}</div>${ok?steps('pa',`data-k="${k}"`,false):''}</div>`;}).join('');
+    h+=`</section>`;
+
+    h+=`<section class="card"><h3>Queen</h3>
+    <div class="kv"><span>Laying</span><b>${e.layRate} eggs/day</b></div>
+    <div class="kv"><span>Brood cells</span><b>${bs.total} (${bs.empty} empty)</b></div>
+    <div class="brood-mix"><span>Eggs ${bs.eggs}</span><span>Larvae ${bs.larvae}</span><span>Capped ${bs.capped}</span>${bs.dead?`<span class="bad">Dead ${bs.dead}</span>`:''}</div>
+    <div class="seg">${['conserve','normal','overdrive'].map(m=>btn(m[0].toUpperCase()+m.slice(1),'qmode',`data-v="${m}"`,G.qMode===m?'on':'')).join('')}</div>
+    ${stage<2?'<p class="hint">Laying modes unlock after the first winter. Tell her where to lay by painting brood cells in the Hive tab.</p>':'<p class="hint">Paint brood cells in the Hive tab to choose where she lays.</p>'}
+    ${G.swarm>0?`<div class="kv"><span>Swarm pressure</span><b class="${G.swarm>60?'bad':''}">${~~G.swarm}%</b></div>${bar(G.swarm,'redbar')}${btn('Raise a swarm cell (5 lb honey, −45%)','prepswarm','','wide')}`:''}
+    </section>`;
+
+    h+=`<section class="card"><h3>Comb <span class="sub">${Object.keys(G.comb).length} cells</span></h3>
+    <div class="kv"><span>Brood / Storage</span><b>${bs.total} / ${combCount('s')}</b></div>
+    <div class="kv"><span>New cells become</span></div>
+    <div class="seg">${[['auto','Auto'],['b','Brood'],['s','Storage']].map(([v,l])=>btn(l,'newcomb',`data-v="${v}"`,G.newComb===v?'on':'')).join('')}</div>
+    ${btn('Open the Hive to paint cells','view','data-v="hive"','wide')}
+    </section>`;
+
+    h+=`<section class="card"><h3>Scouts <span class="sub">${G.scouts.length}/3 teams</span></h3>
+    ${G.scouts.map(s=>`<div class="kv"><span>Team of ${s.n}</span><b>back in ${s.days} day${s.days>1?'s':''}</b></div>`).join('')}
+    <p class="hint">Tap a dark tile at the edge of the Map to scout it. Costs ${SCOUT_BEES} idle bees for ${SCOUT_DAYS} days.</p>
+    </section>`;
+
+    h+=`<section class="card"><h3>${G._colonyName||'Your Colony'}</h3>
+    <div class="kv"><span>Stage</span><b>${STAGE_NAMES[stage]}</b></div>
+    <p class="hint">Next: ${stageNextDesc()}</p>
+    <div class="kv"><span>Winters survived</span><b>${G._wintersS}</b></div>
+    <div class="kv"><span>Peak population</span><b>${G._peakB}</b></div>
+    <div class="kv"><span>Honey made</span><b>${G._totH.toFixed(0)} lb</b></div>
+    <div class="kv"><span>Dead zones restored</span><b>${G._tilesRestored}</b></div>
+    ${btn('Start a new colony','newgame','','wide danger')}
+    </section>`;
+
+    $('colony').innerHTML=h;
+}
+
+function renderHivebar(){
+    document.querySelectorAll('#hivebar [data-a="hmode"]').forEach(b=>b.classList.toggle('on',b.dataset.v===G.hmode));
+    $('hb-hint').textContent=G.hmode==='inspect'?'Tap a cell to inspect it · drag to move':G.hmode==='b'?'Tap or drag to make brood cells (queen lays here)':'Tap or drag to make storage cells (honey goes here)';
+}
+
+// ── SLIDE-UP PANEL ────────────────────────────────────────────────────────────
+function openSel(sel){G.sel=sel;renderPanel(econ());$('panel').classList.add('open');}
+function closePanel(){G.sel=null;$('panel').classList.remove('open');if(window._S)window._S.clearHl();}
+
+function renderPanel(e){
+    const s=G.sel;if(!s)return;
+    let title='',body='';
+    if(s.kind==='fog'){
+        const sc=G.scouts.find(m=>m.k===s.k);
+        title='Unknown Land';
+        body=`<p class="desc">Unexplored. Scouts will find out what grows here.</p>`+
+            (sc?`<p class="note">Scouts return in ${sc.days} day${sc.days>1?'s':''}.</p>`:
+             scoutable(s.k)?btn(`Send scouts (${SCOUT_BEES} bees, ${SCOUT_DAYS} days)`,'scout',`data-k="${s.k}"`,'wide'):
+             `<p class="note">Too deep — scout the tiles closer to home first.</p>`);
+    }else if(s.kind==='cell'){
+        const c=G.comb[s.k];if(!c){closePanel();return;}
+        if(c.t==='q'){title='The Queen';body=`<p class="desc">She lays ${e.layRate} eggs a day into empty brood cells, nearest the centre first.</p>${btn('Queen settings','view','data-v="colony"','wide')}`;}
+        else if(c.t==='b'){
+            title='Brood Cell';
+            const st=c.d>0?`Dead brood — nurses will clear it in ${c.d} day${c.d>1?'s':''}`:c.a<0?'Empty — waiting for an egg':c.a<=2?`Egg · day ${c.a+1} of 21`:c.a<=8?`Larva · day ${c.a+1} of 21 · needs a nurse`:`Capped pupa · hatches in ${21-c.a} days`;
+            body=`<p class="desc">${st}</p>${c.p?'<p class="note">Will become storage after it hatches.</p>':''}${btn(c.p?'Keep as brood':'Make this a storage cell','cellset',`data-k="${s.k}" data-v="${c.p?'b':'s'}"`,'wide')}`;
         }else{
-            S.bgG.setVisible(true);S.hvG.setVisible(false);
-            Object.values(S.fTx).forEach(t=>t.setVisible(true));
-            S.cam.setScroll(-S.cam.width/2,-S.cam.height/2);
-            S.drawMap();
+            title='Storage Cell';
+            body=`<p class="desc">Holds ${CELL_CAP} lb. The hive is ${~~((G.honey+G.nectar)/Math.max(1,e.cap)*100)}% full (${f1(G.honey)} honey, ${f1(G.nectar)} nectar).</p>${btn('Make this a brood cell','cellset',`data-k="${s.k}" data-v="b"`,'wide')}`;
         }
+    }else{
+        const k=s.k,t=G.tiles[k];if(!t){closePanel();return;}
+        const d=TD[t.type],ok=inRange(t),dist=hdist(t.q,t.r);
+        title=d.label;
+        if(t.type==='HIVE_BOX'){
+            body=`<div class="kv"><span>Bees</span><b>${G.bees} (${idle()} idle)</b></div><div class="kv"><span>Honey</span><b>${f1(G.honey)} lb</b></div>
+            ${btn('Manage workers','view','data-v="colony"','wide')}${btn('Look inside the hive','view','data-v="hive"','wide')}`;
+        }else if(t.type==='DEAD_ZONE'){
+            const p=G.restore[k]||0,n=G.pa[k]||0;
+            body=`<p class="desc">${d.desc}</p>${bar(p,'greenbar')}<p class="note">${~~p}% restored</p>`+
+              (getStage()<2?`<p class="note warn">Pollinators unlock after your first winter.</p>`:
+               !ok?`<p class="note warn">Out of range (${dist} hexes). Range grows with colony size.</p>`:
+               `<div class="row"><div class="row-top"><span class="rname">Pollinators</span><span class="rnum">${n}</span></div>${steps('pa',`data-k="${k}"`)}</div>`);
+        }else if(d.forage){
+            const n=G.fa[k]||0,y=tileYield(k);
+            body=`<div class="chips"><span class="chip">${STG[t.stage]}</span>${hasWater(t)?'<span class="chip blue">water +10%</span>':''}<span class="chip">${dist} hex out</span></div>
+            <p class="desc">${d.desc}</p>
+            <div class="kv"><span>Each forager brings</span><b>${y.toFixed(2)} lb nectar/day</b></div>`+
+            (!ok?`<p class="note warn">Out of range. Your bees reach ${G.frad} hex${G.frad>1?'es':''}; range grows at 100 bees.</p>`:
+            `<div class="row"><div class="row-top"><span class="rname">Foragers here</span><span class="rnum">${n}</span></div>
+             <div class="rdesc">${f1(y*n)} lb nectar/day · ${idle()} idle bees at home</div>${steps('fa',`data-k="${k}"`)}</div>
+             ${btn('Recall all','farecall',`data-k="${k}" ${n?'':'disabled'}`,'wide ghost')}`);
+        }else body=`<p class="desc">${d.desc}</p>`;
     }
-    hud();
+    $('panel-title').textContent=title;$('panel-body').innerHTML=body;
 }
-function cycleSpeed(){
-    G.speed=G.speed>=3?1:G.speed+1;
-    G.ms=G.speed===3?1000:G.speed===2?2000:3000;
-    const lbl=['','1×','2×','3×'][G.speed]||'1×';
-    document.getElementById('speed-btn').textContent=lbl;
-    toast(`Speed: ${lbl}`,'info');save();
-}
-document.getElementById('tab-map').addEventListener('click',()=>setView('map'));
-document.getElementById('tab-hive').addEventListener('click',()=>setView('hive'));
-document.getElementById('speed-btn').addEventListener('click',cycleSpeed);
-document.getElementById('new-game-btn').addEventListener('click',newGame);

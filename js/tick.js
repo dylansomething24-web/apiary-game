@@ -1,342 +1,251 @@
-// ── TICK STATE ────────────────────────────────────────────────────────────────
-let _nIn=0,_hday=0;
-
 // ── SEASON FLASH ─────────────────────────────────────────────────────────────
 function flashSeason(name){
-    const c={Spring:'#50cc70',Summer:'#e8c030',Fall:'#c86020',Winter:'#78a8d8'}[name]||'#888';
-    const el=document.createElement('div');
-    el.style.cssText=`position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.55);z-index:900;pointer-events:none;`;
-    el.innerHTML=`<div style="font:italic 3.2rem 'Baskerville',Georgia,serif;color:${c};text-shadow:0 0 40px ${c}88;">${name}</div>`;
-    document.body.appendChild(el);
-    setTimeout(()=>el.remove(),1500);
+    const el=document.createElement('div');el.className='season-flash';
+    el.innerHTML=`<span style="color:${SCOL[name]}">${name}</span>`;
+    document.body.appendChild(el);setTimeout(()=>el.remove(),1600);
+}
+// once-per-N-days warnings so toasts don't spam
+function warnOnce(key,msg,days=6,type='warn'){
+    const t=G.year*YEAR+G.day;
+    if(G._warn[key]&&t-G._warn[key]<days)return;
+    G._warn[key]=t;toast(msg,type);
 }
 
-// ── MAIN TICK ─────────────────────────────────────────────────────────────────
+// ── MAIN TICK (one in-game day) ───────────────────────────────────────────────
 function tick(){
-    // ── Day advance ──────────────────────────────────────────────────────────
-    G.day++;
-    const totalDays=SLEN.reduce((a,b)=>a+b,0); // 100
-    if(G.day>totalDays){G.day=1;G.year++;}
-    const dv=doyNum(G.day);
-    const newSeason=doyStr(G.day);
-
-    // ── Season transitions ────────────────────────────────────────────────────
-    if(newSeason!==G.season){
-        const prev=G.season;
-        G.season=newSeason;
-        flashSeason(newSeason);
-        // Winter → Spring: count survived winter
-        if(newSeason==='Spring'&&prev==='Winter'){
-            G._wintersS++;
-            G._w82=false; // reset for next fall
-            const stageNow=getStage();
-            if(stageNow>G._stagePrev){G._stagePrev=stageNow;onStageAdvance(stageNow);}
+    G.day++;if(G.day>YEAR){G.day=1;G.year++;}
+    const ns=seasonOf(G.day);
+    if(ns!==G.season){
+        const prev=G.season;G.season=ns;flashSeason(ns);
+        if(prev==='Winter'){
+            G._wintersS++;G._wW=false;G._w82=false;
+            toast('Spring. The queen begins laying again.','green');
         }
-        // spring/summer forage radius by population
-        const newRad=G.bees>=400?3:G.bees>=100?2:1;
-        if(newRad>G.frad){G.frad=newRad;toast(`The colony's range extends — new tiles are now reachable`,'green');}
+        if(ns==='Winter')toast('Winter. No foraging, no laying — the colony lives on stored honey.','warn');
+        if(ns==='Fall')toast('Fall. Flowers are thinning. Fill your storage cells before winter.','warn');
+    }
+    const e=econ();
+
+    // Foragers bring nectar home (only as much as storage can hold)
+    const space=Math.max(0,e.cap-G.honey-G.nectar);
+    let nIn=e.nectarIn;
+    if(nIn>space+0.001){
+        if(nIn>0)warnOnce('full','Storage is full — nectar is being wasted. Add builders or paint storage cells in the Hive.');
+        nIn=space;
+    }
+    G.nectar+=nIn;G._nIn=nIn;
+
+    // Processors turn nectar into honey
+    const proc=Math.min(G.nectar,e.procCap);
+    G.nectar-=proc;const hIn=proc*PROC_EFF;
+    G.honey+=hIn;G._totH+=hIn;G._hIn=hIn;
+    if(e.nectarIn>e.procCap*1.3&&G.nectar>3)warnOnce('proc','Nectar is piling up — assign more processors.');
+
+    // Adults eat
+    G.honey-=e.adultCost;
+
+    // Brood ages and hatches
+    let born=0;
+    for(const c of Object.values(G.comb)){
+        if(c.t!=='b')continue;
+        if(c.d>0){if(G.nurses>0)c.d--;continue;}
+        if(c.a>=0){c.a++;if(c.a>=21){c.a=-1;born++;}}
+        if(c.a<0&&c.p){c.t=c.p;delete c.p;}
+    }
+    G.bees+=born;G._born=born;
+
+    // Nurses feed larvae (costs honey); unfed larvae die
+    const larvaeCells=Object.values(G.comb).filter(c=>c.t==='b'&&!(c.d>0)&&c.a>=3&&c.a<=8);
+    const affordable=Math.floor(Math.max(0,G.honey)/LARVA_COST);
+    const fed=Math.min(larvaeCells.length,e.nurseCap,affordable);
+    G.honey-=fed*LARVA_COST;
+    let starved=0;
+    larvaeCells.slice(fed).forEach(c=>{c.a=-1;c.d=3;starved++;});
+    if(starved){
+        const why=fed>=e.nurseCap?'not enough nurses':'not enough honey';
+        warnOnce('larva',`${starved} ${starved>1?'larvae':'larva'} died — ${why}.`,4);
     }
 
-    // ── Stage check (non-winter transitions) ─────────────────────────────────
-    const stageNow=getStage();
-    if(stageNow>G._stagePrev){G._stagePrev=stageNow;onStageAdvance(stageNow);}
-
-    // ── Season multiplier ─────────────────────────────────────────────────────
-    const eff={Spring:1.0,Summer:1.15,Fall:0.6,Winter:0}[G.season];
-
-    // ── Foragers collect nectar ───────────────────────────────────────────────
-    let nIn=0;
-    Object.entries(G.fa).forEach(([k,n])=>{
-        const t=G.tiles[k];if(!t||t.stage===0)return;
-        const def=TD[t.type];if(!def||!def.forage)return;
-        let bonus=1;
-        nbrs(t.q,t.r).forEach(([nq,nr])=>{const nt=G.tiles[hkey(nq,nr)];if(nt&&nt.type==='WATER')bonus=1.1;});
-        nIn+=def.forage*n*0.022*eff*bonus;
-    });
-    _nIn=nIn;G._nf+=nIn;
-    const nAdd=~~G._nf;G._nf-=nAdd;
-    const nCap=25;
-    if(G.nectar+nAdd>nCap){
-        G.nectar=nCap;
-        if(!G._hbWarn){G._hbWarn=true;toast('Hive honey-bound — add more processors','warn');}
-    }else{G.nectar+=nAdd;if(nAdd>0)G._hbWarn=false;}
-
-    // ── Processors convert nectar → honey (75%) ───────────────────────────────
-    const procCap=G.processors*1.5;
-    const toProc=Math.min(G.nectar,procCap);
-    G.nectar=Math.max(0,G.nectar-toProc);
-    G._hf+=toProc*0.75;
-    const hAdd=~~G._hf;G._hf-=hAdd;
-    if(hAdd>0){G.honey+=hAdd;G._totH+=hAdd;}
-    _hday=hAdd;
-
-    // ── Nurse honey cost (feeding larvae) ─────────────────────────────────────
-    if(G.season!=='Winter'&&G.nurses>0){
-        G.honey=Math.max(0,G.honey-G.nurses*0.08);
-    }
-
-    // ── Winter consumption ────────────────────────────────────────────────────
-    if(G.season==='Winter'){
-        G.honey=Math.max(0,G.honey-G.bees*0.08);
-        if(G.honey<=0&&G.bees>2){
-            G.bees=Math.max(2,G.bees-~~(G.bees*0.06));
-            if(G.bees<=20&&!G._wasLow)G._wasLow=true;
+    // Builders draw new comb (wax costs honey)
+    let built=0;
+    if(G.builders>0){
+        G._bf+=G.builders*BUILD_RATE;
+        while(G._bf>=1&&G.honey>=CELL_COST){
+            const k=nextFrontier();if(!k){G._bf=0;break;}
+            G.comb[k]={t:newCellType(),a:-1};G.honey-=CELL_COST;G._bf-=1;built++;
         }
+        if(G._bf>2)G._bf=2;
     }
 
-    // ── Brood cycle ───────────────────────────────────────────────────────────
-    if(G.season!=='Winter'){
-        G.brood=(G.brood+1)%21;
-        if(G.brood===0){
-            const need=Math.ceil(G.bees/20);
-            if(G.nurses>=need){
-                const qm={conserve:0.65,normal:1.0,overdrive:1.35}[G.qMode]||1;
-                const added=~~(G.bees*0.06*qm);
-                G.bees+=Math.max(1,added);
-                if(G.bees>G._peakB)G._peakB=G.bees;
-                // Swarm pressure
-                if(G.bees>150&&(G.season==='Spring'||G.season==='Summer')){
-                    const rate={conserve:0.8,normal:2,overdrive:3.5}[G.qMode]||2;
-                    G.swarm=Math.min(100,G.swarm+rate);
-                }
-                // Natural attrition
-                G.bees=Math.max(2,G.bees-~~(G.bees*0.015));
-            }else{
-                if(!G._nt||Math.random()<.3)toast('Nurse shortage — brood cells darkening','warn');
-            }
-            G._distress=G._distress.filter(()=>Math.random()>.1);
-        }
+    // Queen lays into empty brood cells, nearest the centre first
+    if(G.season!=='Winter'&&G.honey>0){
+        let n=LAY[G.qMode];
+        const empties=Object.entries(G.comb).filter(([k,c])=>c.t==='b'&&c.a<0&&!(c.d>0)&&!c.p).sort((a,b)=>kdist(a[0])-kdist(b[0]));
+        for(const[,c]of empties){if(n<=0)break;c.a=0;n--;}
+        if(n>=LAY[G.qMode]&&G.day>3)warnOnce('lay','The queen has no empty brood cells to lay in. Build comb or paint brood cells.',8);
     }
 
-    // ── Swarm auto-fires at 100% ──────────────────────────────────────────────
+    // Natural deaths
+    G._df+=G.bees*{Spring:.012,Summer:.012,Fall:.008,Winter:.004}[G.season];
+    const died=Math.floor(G._df);G._df-=died;G.bees-=died;
+    // Starvation
+    if(G.honey<0){
+        G.honey=0;const s=Math.max(1,Math.floor(G.bees*.05));G.bees-=s;
+        warnOnce('starve',`The colony is starving — ${s} bee${s>1?'s':''} died. Get foragers and processors working.`,3);
+    }
+    G.bees=Math.max(0,G.bees);G._died=died;
+    if(G.bees>G._peakB)G._peakB=G.bees;
+    if(G.bees<=20&&G._peakB>30)G._wasLow=true;
+
+    // Swarm pressure: a big, crowded colony wants to split
+    const bs=broodStats();
+    if(G.bees>120&&bs.empty<bs.total*0.1&&(G.season==='Spring'||G.season==='Summer')){
+        G.swarm=Math.min(100,G.swarm+{conserve:.8,normal:2,overdrive:3.5}[G.qMode]);
+        if(G.swarm>=80)warnOnce('swarm','The colony grows restless — swarm pressure is high. Build brood room or prepare a swarm cell.',10);
+    }else G.swarm=Math.max(0,G.swarm-1);
     if(G.swarm>=100){
-        const lost=~~(G.bees*0.28);G.bees=Math.max(2,G.bees-lost);G.swarm=0;
-        toast(`The colony swarmed — ${lost} bees departed`,'warn');hap([100,50,100]);
-        G._col++;
-    }
-    if(G.swarm>=80&&G.swarm<100&&G._col===0){
-        G._col=1;toast('The colony grows restless','warn');
+        const lost=Math.floor(G.bees*.4);G.bees-=lost;G.swarm=0;
+        toast(`The colony swarmed — the old queen left with ${lost} bees. A new queen takes over.`,'warn');hap([100,50,100]);
     }
 
-    // ── Low-bee tracking ──────────────────────────────────────────────────────
-    if(G.bees<=20&&!G._wasLow)G._wasLow=true;
+    rebalance();
 
-    // ── Scout missions ────────────────────────────────────────────────────────
-    G.scouts=G.scouts.filter(s=>{
-        s.days--;
-        if(s.days<=0){revealTile(s.k);return false;}
-        return true;
-    });
+    // Scouts
+    G.scouts=G.scouts.filter(s=>{if(--s.days<=0){revealTile(s.k);return false;}return true;});
 
-    // ── Pollinator restoration ────────────────────────────────────────────────
-    const stage=getStage();
-    const restBonus=stage>=3?1.2:1.0;
+    // Pollinators restore dead zones
+    const bonus=getStage()>=3?1.2:1;
     Object.entries(G.pa).forEach(([k,n])=>{
-        const t=G.tiles[k];
-        if(!t||t.type!=='DEAD_ZONE'){delete G.pa[k];return;}
-        if(!G.restore[k])G.restore[k]=0;
-        G.restore[k]=Math.min(100,G.restore[k]+n*3.5*restBonus);
+        const t=G.tiles[k];if(!t||t.type!=='DEAD_ZONE'){delete G.pa[k];return;}
+        G.restore[k]=Math.min(100,(G.restore[k]||0)+n*3.5*bonus);
         if(G.restore[k]>=100){
-            G.restore[k]=100;t.stage=1;t.type='WILDFLOWER';t._wasRevived=true;
-            G._tilesRestored++;
-            const recalled=G.pa[k];delete G.pa[k];
-            toast(`A dead zone stirs back to life — ${recalled} pollinators recalled`,'green');
-            hap([40,20,40,20,40]);Snd.revive();
-            // Check stage advance from restoration
-            const snew=getStage();
-            if(snew>G._stagePrev){G._stagePrev=snew;onStageAdvance(snew);}
+            t.type='WILDFLOWER';t.stage=1;delete G.restore[k];delete G.pa[k];G._tilesRestored++;
+            toast(`A dead zone stirs back to life — ${n} pollinators come home`,'green');hap([40,20,40,20,40]);Snd.revive();
         }
     });
 
-    // ── Tile healing ──────────────────────────────────────────────────────────
-    if(G.day%5===0){
-        const eligible=Object.values(G.tiles).filter(t=>{
-            if(t.type==='HIVE_BOX'||t.type==='WATER'||t.type==='DEAD_ZONE'||t.type==='STRUCTURE')return false;
-            if(t.stage>=3)return false;
-            const d=hdist(t.q,t.r,0,0);
-            return d<=G.frad;
-        });
-        if(eligible.length){
-            const t=eligible[~~(Math.random()*eligible.length)];
-            t.stage=Math.min(3,t.stage+1);
-        }
-    }
+    // Foraging heals the land
+    Object.entries(G.fa).forEach(([k,n])=>{
+        const t=G.tiles[k];if(!t||t.stage>=3||!TD[t.type].forage)return;
+        if(Math.random()<n*0.012){t.stage++;toast(`${TD[t.type].label} is ${STG[t.stage].toLowerCase()} now — more nectar`,'green');}
+    });
 
-    // ── Forage radius update ──────────────────────────────────────────────────
-    const newRad=G.bees>=400?3:G.bees>=100?2:1;
-    if(newRad>G.frad){G.frad=newRad;toast(`The colony's range extends — new tiles reachable`,'green');}
+    // Forage range follows population
+    const nr=G.bees>=400?3:G.bees>=100?2:1;
+    if(nr>G.frad){G.frad=nr;toast('The colony’s range extends — more tiles are reachable','green');}
 
-    // ── Season warnings ───────────────────────────────────────────────────────
-    const doy=G.day;
-    const fallStart=sfrom('Fall');
-    const winterStart=sfrom('Winter');
-    const winterNeed=Math.ceil(G.bees*0.08*15);
-    if(doy===fallStart+17&&!G._wW){ // day 78
-        G._wW=true;
-        if(G.honey<winterNeed)toast(`Winter in ${SLEN[2]-(doy-fallStart)} days — need ${winterNeed} lbs, have ${~~G.honey}`,'warn');
-    }
-    if(doy===fallStart+21&&!G._w82){ // day 82
-        G._w82=true;
-        if(G.honey<winterNeed)toast(`CRITICAL: Winter in ${winterStart-doy} days — ${winterNeed-~~G.honey} lbs short`,'warn');hap([200,100,200]);
-    }
+    // Winter warnings
+    const fs=seasonStart('Fall'),need=winterNeed();
+    if(G.day===fs+17&&!G._wW){G._wW=true;if(G.honey<need)toast(`Winter in 8 days — you need about ${need} lb of honey, you have ${G.honey.toFixed(0)}`,'warn');}
+    if(G.day===fs+21&&!G._w82){G._w82=true;if(G.honey<need){toast(`CRITICAL: winter in 4 days — ${(need-G.honey).toFixed(0)} lb short`,'warn');hap([200,100,200]);}}
 
-    // ── Hive collapse check ───────────────────────────────────────────────────
-    if(G.bees<=2){
-        G._col++;
-        if(G._col>=3)return collapse();
-    }else G._col=0;
+    // Collapse
+    if(G.bees<=2){if(++G._low>=3){collapse();return;}}else G._low=0;
 
-    // ── Threats (every 22–44 days) ────────────────────────────────────────────
-    G._nt--;
-    if(G._nt<=0){
-        G._nt=22+~~(Math.random()*22);
-        if(Math.random()<.6)threat();
-    }
+    // Events
+    if(--G._nt<=0){G._nt=20+~~(Math.random()*20);if(!(G.year===1&&G.day<20)&&Math.random()<.65)threat();}
 
-    // ── Milestones ────────────────────────────────────────────────────────────
-    checkMS();
-
-    // ── Ambient volume ────────────────────────────────────────────────────────
-    Snd.setVol();
-
-    // ── Save + redraw ─────────────────────────────────────────────────────────
-    save();
-    if(window._S)window._S.refresh();
-    hud();
+    const st=getStage();if(st>G._stagePrev){G._stagePrev=st;onStageAdvance(st);}
+    checkMS();Snd.setVol();save();
+    if(window._S){window._S.refresh();if(G._hIn>0.2&&G.view==='map')window._S.burstForage();}
+    renderAll(true);
 }
 
-// ── THREAT SYSTEM ─────────────────────────────────────────────────────────────
+// ── EVENTS ────────────────────────────────────────────────────────────────────
 function threat(){
-    const pool=[];
-    // Standard threats
-    pool.push({w:3,fn:()=>wasp()},{w:2.5,fn:()=>varroa()},{w:1,fn:()=>bear()});
-    // Seasonal
-    if(G.season==='Summer')pool.push({w:1.5,fn:()=>goodWeather()});
-    pool.push({w:1,fn:()=>diseasedFlower()});
-    // Total weight
-    const total=pool.reduce((a,b)=>a+b.w,0);
-    let r=Math.random()*total;
-    for(const e of pool){r-=e.w;if(r<=0){e.fn();return;}}
-    pool[pool.length-1].fn();
+    const pool=[{w:3,fn:wasp},{w:2,fn:varroa},{w:1,fn:bear},{w:2,fn:robbing},{w:1,fn:diseasedFlower}];
+    if(G.season==='Summer')pool.push({w:1.5,fn:goodWeather});
+    if(G.season==='Fall')pool.push({w:1.5,fn:lateBloom});
+    if(G.season==='Winter')return;
+    let r=Math.random()*pool.reduce((a,b)=>a+b.w,0);
+    for(const p of pool){r-=p.w;if(r<=0)return p.fn();}
 }
-
 function wasp(){
-    if(G.guards>=3){toast('Your guards drove off the wasp scouts','green');return;}
+    const need=guardsNeeded();
+    if(G.guards>=need){toast(`Wasps probed the entrance — your ${G.guards} guards drove them off`,'green');return;}
     Snd.danger();hap([80,40,80]);
-    showChoice({
-        icon:'🪲',title:'Wasp Raid',
-        body:`Wasps have found the entrance. ${G.guards} guards are holding them off.`,
-        a:{label:'Rally the guards — fight them off',fn:()=>{const lost=~~(Math.max(0,(3-G.guards)*5)+G.honey*.05);G.honey=Math.max(0,G.honey-lost);toast(`Guards repelled the raid — ${lost} lbs honey lost`,'warn');}},
-        b:{label:'Seal the entrance temporarily',fn:()=>{const lost=Math.min(2,G.bees-2);G.bees-=lost;toast(`Entrance sealed — ${lost} bees trapped outside`,'warn');}},
+    showChoice({icon:'🪲',title:'Wasp Raid',
+        body:`Wasps are at the entrance. You have ${G.guards} guards; about ${need} are needed to hold them.`,
+        a:{label:'Fight them off',hint:'Lose honey',fn:()=>{const l=Math.min(G.honey,(need-G.guards)*1.5);G.honey-=l;toast(`Wasps driven off — they carried away ${l.toFixed(1)} lb`,'warn');}},
+        b:{label:'Seal the entrance',hint:'Lose a few foragers',fn:()=>{const l=Math.min(Math.max(1,Math.ceil(foragerTotal()*.1)),G.bees-3);G.bees-=Math.max(0,l);rebalance();toast(`Entrance sealed — ${l} foragers were locked out`,'warn');}},
     });
 }
 function varroa(){
     Snd.danger();hap([80,40,80,40,80]);
-    showChoice({
-        icon:'🕷',title:'Varroa Outbreak',
-        body:'A mite infestation is spreading through the inner brood ring.',
-        a:{label:'Remove the infected cells',fn:()=>{const lost=~~(G.bees*.08);G.bees=Math.max(2,G.bees-lost);G._distress=[];toast(`Infected cells removed — ${lost} bees lost`,'warn');}},
-        b:{label:'Wait and see',fn:()=>{const lost=~~(G.bees*.15);G.bees=Math.max(2,G.bees-lost);const ring1ct=6;G._distress=[...Array(ring1ct).keys()];toast(`Mites spread — ${lost} bees lost, brood distressed`,'warn');}},
+    const res=getStage()>=5?.75:1;
+    const brood=Object.values(G.comb).filter(c=>c.t==='b'&&c.a>=3);
+    showChoice({icon:'🕷',title:'Varroa Mites',
+        body:'Mites are spreading through the capped brood.',
+        a:{label:'Remove infected brood',hint:'Lose some brood now',fn:()=>{let n=0;brood.forEach(c=>{if(Math.random()<.3*res){c.a=-1;c.d=3;n++;}});toast(`${n} infected cells cleared out`,'warn');}},
+        b:{label:'Wait and see',hint:'Risk adults and brood',fn:()=>{const l=Math.floor(G.bees*.12*res);G.bees-=l;let n=0;brood.forEach(c=>{if(Math.random()<.5*res){c.a=-1;c.d=3;n++;}});rebalance();toast(`Mites spread — ${l} bees and ${n} brood lost`,'warn');}},
     });
 }
 function bear(){
     Snd.danger();hap([200,100,200]);
-    showChoice({
-        icon:'🐻',title:'Bear Attack',
-        body:"A bear has found the hive. She's tearing through the entrance.",
-        a:{label:'Send the guards',fn:()=>{const lost=~~(G.bees*.04);G.bees=Math.max(2,G.bees-lost);toast(`Guards drove the bear off — ${lost} bees lost`,'warn');}},
-        b:{label:"Let her raid",fn:()=>{const hLost=~~(G.honey*.25);const bLost=~~(G.bees*.05);G.honey=Math.max(0,G.honey-hLost);G.bees=Math.max(2,G.bees-bLost);toast(`Bear raided — ${hLost} lbs honey, ${bLost} bees lost`,'warn');}},
+    showChoice({icon:'🐻',title:'Bear',
+        body:"A bear has found the hive and is tearing at the entrance.",
+        a:{label:'Send everyone to sting',hint:'Lose bees, keep honey',fn:()=>{const l=Math.max(1,Math.floor(G.bees*.05));G.bees-=l;rebalance();toast(`The bear retreated — ${l} bees died defending`,'warn');}},
+        b:{label:'Let her take what she wants',hint:'Lose honey and comb',fn:()=>{const h=G.honey*.35;G.honey-=h;G.nectar*=.6;toast(`The bear took ${h.toFixed(1)} lb of honey`,'warn');}},
     });
 }
+function robbing(){
+    if(G.guards>=guardsNeeded()){toast('Robber bees tried the entrance — your guards turned them away','green');return;}
+    const l=Math.min(G.honey,(guardsNeeded()-G.guards)*1.2);G.honey-=l;
+    toast(`Robber bees stole ${l.toFixed(1)} lb of honey — you need more guards`,'warn');
+}
+function lateBloom(){const add=Math.min(4,Math.max(0,capacity()-G.honey-G.nectar));G.nectar+=add;toast(`A late bloom — foragers returned heavy (+${add.toFixed(1)} lb nectar)`,'green');}
 function goodWeather(){
-    Snd.tap();
-    showChoice({
-        icon:'☀',title:'Exceptional Weather',
-        body:'Perfect conditions. Flowers everywhere. Push the foragers harder, or let them set their own pace?',
-        a:{label:'Double shift — push hard',fn:()=>{
-            // Double nectar for today
-            const bonus=Math.max(1,~~(_nIn*1.0));G.nectar=Math.min(25,G.nectar+bonus);
-            const fatigue=~~(G.bees*.01);G.bees=Math.max(2,G.bees-fatigue);
-            toast(`Pushed hard — nectar flowing, ${fatigue} bees fatigued`,'green');
-        }},
-        b:{label:'Let them work naturally',fn:()=>toast('The bees forage at their own pace','green')},
+    showChoice({icon:'☀',title:'Perfect Weather',
+        body:'Flowers everywhere. Push the foragers harder today?',
+        a:{label:'Double shift',hint:'Extra nectar, a few tired bees',fn:()=>{const e=econ();const add=Math.min(e.nectarIn,Math.max(0,capacity()-G.honey-G.nectar));G.nectar+=add;const l=Math.ceil(foragerTotal()*.03);G.bees-=l;rebalance();toast(`+${add.toFixed(1)} lb nectar, ${l} bees worn out`,'green');}},
+        b:{label:'Normal pace',hint:'No risk',fn:()=>toast('The bees work at their own pace','green')},
     });
 }
 function diseasedFlower(){
-    // Find a foraged tile
-    const foraged=Object.entries(G.fa).filter(([k,n])=>n>0&&G.tiles[k]&&G.tiles[k].type!=='HIVE_BOX');
-    if(!foraged.length){toast('Scouts report a diseased crop nearby — no foragers affected','warn');return;}
-    const [targetKey]=foraged[~~(Math.random()*foraged.length)];
-    const t=G.tiles[targetKey];
-    Snd.danger();
-    showChoice({
-        icon:'🥀',title:'Diseased Flower Source',
-        body:`Scouts report diseased crops at the ${TD[t.type].label}. Recall those foragers or push through?`,
-        a:{label:'Recall immediately',fn:()=>{
-            const n=G.fa[targetKey]||0;delete G.fa[targetKey];
-            t.stage=Math.max(0,t.stage-2);
-            toast(`Foragers recalled from ${TD[t.type].label} — tile damaged`,'warn');
-        }},
-        b:{label:'Keep foraging',fn:()=>{
-            t.stage=Math.max(0,t.stage-1);
-            const lost=~~(G.bees*.03);G.bees=Math.max(2,G.bees-lost);
-            toast(`Disease spread — ${lost} bees lost, tile weakened`,'warn');
-        }},
+    const ks=Object.keys(G.fa);if(!ks.length)return;
+    const k=ks[~~(Math.random()*ks.length)],t=G.tiles[k];
+    showChoice({icon:'🥀',title:'Diseased Flowers',
+        body:`Scouts report blight in the ${TD[t.type].label}.`,
+        a:{label:'Recall foragers',hint:'Tile loses health',fn:()=>{delete G.fa[k];t.stage=Math.max(0,t.stage-1);toast('Foragers recalled — the field will need time','warn');}},
+        b:{label:'Keep foraging',hint:'Some bees get sick',fn:()=>{const l=Math.max(1,Math.ceil(G.fa[k]*.3));G.bees-=l;t.stage=Math.max(0,t.stage-1);rebalance();toast(`${l} foragers got sick and died`,'warn');}},
     });
 }
 
-// ── SCOUTS ────────────────────────────────────────────────────────────────────
-const REVEAL_WEIGHTS={WILDFLOWER:3,FOREST:2,CLOVER:2,SUNFLOWER:1,DEAD_ZONE:1};
-function revealTile(k){
-    if(!G.fog[k])return;
-    const{q,r}=G.fog[k];
-    const pool=[];
-    Object.entries(REVEAL_WEIGHTS).forEach(([t,w])=>{for(let i=0;i<w;i++)pool.push(t);});
-    const type=pool[~~(Math.random()*pool.length)];
-    G.tiles[k]={q,r,type,stage:1};
-    delete G.fog[k];
-    // Expose adjacent fog at level 1
-    nbrs(q,r).forEach(([nq,nr])=>{
-        const fk=hkey(nq,nr);
-        if(!G.tiles[fk]&&!G.fog[fk])G.fog[fk]={q:nq,r:nr,level:1};
-        else if(G.fog[fk]&&G.fog[fk].level===2)G.fog[fk].level=1;
-    });
-    toast(`Scouts mapped new territory: ${TD[type].label}`,'green');
-    if(window._S)window._S.drawMap();
-    G.scouts.find(s=>s.k===k&&!s.revealed)&&(G.scouts.find(s=>s.k===k).revealed=true);
-    checkMS();
+// ── SCOUTING ──────────────────────────────────────────────────────────────────
+function scoutable(k){const f=G.fog[k];return f&&f.level===1&&nbrs(f.q,f.r).some(([q,r])=>G.tiles[hkey(q,r)]);}
+function sendScout(k){
+    if(!scoutable(k)){toast('Scouts can only reach dark tiles touching your land','warn');return;}
+    if(G.scouts.length>=3){toast('Three scout teams are already out','warn');return;}
+    if(G.scouts.find(s=>s.k===k)){toast('Scouts are already heading there','warn');return;}
+    if(idle()<SCOUT_BEES){toast(`Need ${SCOUT_BEES} idle bees to scout`,'warn');return;}
+    G.scouts.push({k,days:SCOUT_DAYS,n:SCOUT_BEES});
+    toast(`Scouts are out — back in ${SCOUT_DAYS} days`,'green');
 }
-function sendScout(k,q,r){
-    if(G.scouts.length>=3){toast('Three scout teams already out','warn');return;}
-    if(G.scouts.find(s=>s.k===k)){toast('Already scouting that area','warn');return;}
-    G.scouts.push({k,q,r,days:3,revealed:false});
-    toast('Scouts dispatched — returns in 3 days','green');
-    closePanel();hud();
+function revealTile(k){
+    const f=G.fog[k];if(!f)return;
+    const type=pick({WILDFLOWER:3,FOREST:2,CLOVER:2,SUNFLOWER:1,DEAD_ZONE:2,WATER:1});
+    G.tiles[k]={q:f.q,r:f.r,type,stage:type==='DEAD_ZONE'?0:1};delete G.fog[k];
+    nbrs(f.q,f.r).forEach(([q,r])=>{const nk=hkey(q,r);if(G.tiles[nk])return;if(!G.fog[nk])G.fog[nk]={q,r,level:1};else G.fog[nk].level=1;});
+    G._ach._scouted=(G._ach._scouted||0)+1;
+    toast(`Scouts found a ${TD[type].label}`,'green');
 }
 
 // ── COLLAPSE ──────────────────────────────────────────────────────────────────
 function collapse(){
-    ovShow('ov-g');
-    document.getElementById('gm-year').textContent=`Year ${G.year}, ${G.season}`;
-    document.getElementById('gm-peak').textContent=G._peakB;
-    document.getElementById('gm-honey').textContent=~~G._totH;
-    document.getElementById('gm-winters').textContent=G._wintersS;
-    document.getElementById('gm-tiles').textContent=G._tilesRestored;
-    document.getElementById('gm-stage').textContent=STAGE_NAMES[getStage()]||'—';
-    if(G._colonyName)document.getElementById('gm-name').textContent=`"${G._colonyName}"`;
+    const set=(id,v)=>document.getElementById(id).textContent=v;
+    set('gm-year',`Year ${G.year}, ${G.season}`);set('gm-peak',G._peakB);set('gm-honey',G._totH.toFixed(0)+' lb');
+    set('gm-winters',G._wintersS);set('gm-tiles',G._tilesRestored);set('gm-stage',STAGE_NAMES[getStage()]);
+    set('gm-name',G._colonyName?`“${G._colonyName}”`:'');
+    localStorage.removeItem(SK);ovShow('ov-g');
 }
 
-// ── QUEEN MODE ────────────────────────────────────────────────────────────────
+// ── QUEEN ─────────────────────────────────────────────────────────────────────
 function setQueenMode(m){
-    if(getStage()<2){toast('Queen mode unlocks after surviving first winter','warn');return;}
-    G.qMode=m;hud();
-    const msgs={conserve:'She lays with restraint.',normal:'Her natural pace.',overdrive:'She lays relentlessly.'};
-    toast(msgs[m]||m,'green');Snd.tap();
+    if(getStage()<2){toast('Laying modes unlock after your first winter','warn');return;}
+    G.qMode=m;toast({conserve:'She lays with restraint — 2 eggs a day.',normal:'Her natural pace — 4 eggs a day.',overdrive:'She lays relentlessly — 7 eggs a day.'}[m],'green');
 }
 function prepSwarm(){
-    if(G.honey<5){toast('Need 5 lbs honey to prepare swarm cells','warn');return;}
-    G.honey-=5;G.swarm=Math.max(0,G.swarm-45);
-    G._ach.sp=true;
-    toast('Swarm cells prepared — colony pressure eases','green');hap([40,20,40]);
-    hud();save();
+    if(G.honey<5){toast('Need 5 lb of honey to raise a swarm cell','warn');return;}
+    G.honey-=5;G.swarm=Math.max(0,G.swarm-45);G._ach.sp=true;
+    toast('Swarm cell raised — the colony settles','green');
 }
