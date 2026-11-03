@@ -52,8 +52,8 @@ function hud(e){
     $('h-date').textContent=`${G.season} · Day ${dayInSeason(G.day)} · Year ${G.year}`;
     $('h-date').style.color=SCOL[G.season];
     $('h-stage').textContent=STAGE_NAMES[getStage()];
-    $('speed-btn').textContent=G.speed+'×';
-    const al=alerts(e)[0];
+    $('speed-btn').textContent=(G.speed===0.5?'½':G.speed)+'×';
+    const pb=$('pause-btn');pb.textContent=G.paused?'▶ Play':'❚❚';pb.classList.toggle('on',!!G.paused);    const al=alerts(e)[0];
     const a=$('h-alert');
     if(al){a.textContent=al[1];a.className='alert a-'+al[0];}
     else{a.textContent='The colony is working well.';a.className='alert a-ok';}
@@ -99,7 +99,8 @@ const ACT={
     fit(){if(window._S)window._S.fitHive();},
     cellset(d){setCell(d.k,d.v);},
     view(d){setView(d.v);},
-    speed(){G.speed=G.speed===1?2:G.speed===2?4:1;},
+    speed(){G.speed=SPEEDS[(SPEEDS.indexOf(G.speed)+1)%SPEEDS.length];if(G.paused)G.paused=false;},
+    pause(){G.paused=!G.paused;},
     close(){closePanel();},
     begin(){beginGame();},
     choice(d){ovHide('ov-c');const f=_choice&&_choice[d.c];_choice=null;if(f)f();},
@@ -242,7 +243,7 @@ function renderColony(e){
 
 function renderHivebar(){
     document.querySelectorAll('#hivebar [data-a="hmode"]').forEach(b=>b.classList.toggle('on',b.dataset.v===G.hmode));
-    $('hb-hint').textContent=G.hmode==='inspect'?'Tap a cell to inspect it · drag to move':G.hmode==='b'?'Tap or drag to make brood cells (queen lays here)':'Tap or drag to make storage cells (honey goes here)';
+    $('hb-hint').textContent=G.hmode==='inspect'?'Drag to move around · tap a cell to inspect it':(G.hmode==='b'?'Drag to paint brood cells (queen lays here)':'Drag to paint storage cells (honey goes here)')+' · two fingers to move';
 }
 
 // ── SLIDE-UP PANEL ────────────────────────────────────────────────────────────

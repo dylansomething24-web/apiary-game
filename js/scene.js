@@ -58,26 +58,41 @@ class GameScene extends Phaser.Scene{
             if(p.downElement&&p.downElement!==canvas)return;
             Snd._start();
             const p1=this.input.pointer1,p2=this.input.pointer2;
-            if(p1.isDown&&p2.isDown){this._pinch={d:Phaser.Math.Distance.Between(p1.x,p1.y,p2.x,p2.y),z:this.cam.zoom};this._down=false;return;}
+            if(p1.isDown&&p2.isDown){
+                const mx=(p1.x+p2.x)/2,my=(p1.y+p2.y)/2;
+                this._pinch={d:Phaser.Math.Distance.Between(p1.x,p1.y,p2.x,p2.y),z:this.cam.zoom,w:this.cam.getWorldPoint(mx,my)};
+                this._down=false;this._paint=false;this._pending=null;return;
+            }
             this._down=true;this._moved=false;this._sx=this.cam.scrollX;this._sy=this.cam.scrollY;this._px=p.x;this._py=p.y;
             this._paint=G.view==='hive'&&G.hmode!=='inspect';this._last=null;
-            if(this._paint)this.paintAt(p);
+            // don't paint yet — a second finger may be coming (two-finger move)
+            this._pending=this._paint?{x:p.x,y:p.y}:null;
         });
         this.input.on('pointermove',p=>{
             if(this._pinch){
                 const p1=this.input.pointer1,p2=this.input.pointer2;
-                if(p1.isDown&&p2.isDown){const d=Phaser.Math.Distance.Between(p1.x,p1.y,p2.x,p2.y);this.setZoom(this._pinch.z*d/this._pinch.d);}
+                if(p1.isDown&&p2.isDown){
+                    // pinch zooms, and the point between the fingers follows them (two-finger pan)
+                    const pi=this._pinch,d=Phaser.Math.Distance.Between(p1.x,p1.y,p2.x,p2.y);
+                    const z=clamp(pi.z*d/pi.d,.4,3),mx=(p1.x+p2.x)/2,my=(p1.y+p2.y)/2;
+                    this.cam.setZoom(z);
+                    this.cam.centerOn(pi.w.x-(mx-this.cam.width/2)/z,pi.w.y-(my-this.cam.height/2)/z);
+                    this.clampCam();
+                }
                 return;
             }
             if(!this._down)return;
-            if(this._paint){this.paintAt(p);return;}
+            if(this._paint){
+                if(this._pending){if(Math.hypot(p.x-this._pending.x,p.y-this._pending.y)<10)return;this.paintAt(this._pending);this._pending=null;}
+                this.paintAt(p);return;
+            }
             const dx=p.x-this._px,dy=p.y-this._py;
-            if(this._moved||Math.abs(dx)>8||Math.abs(dy)>8){this._moved=true;this.cam.setScroll(this._sx-dx/this.cam.zoom,this._sy-dy/this.cam.zoom);}
+            if(this._moved||Math.abs(dx)>8||Math.abs(dy)>8){this._moved=true;this.cam.setScroll(this._sx-dx/this.cam.zoom,this._sy-dy/this.cam.zoom);this.clampCam();}
         });
         this.input.on('pointerup',p=>{
             if(this._pinch){if(!this.input.pointer1.isDown&&!this.input.pointer2.isDown)this._pinch=null;return;}
             if(!this._down)return;this._down=false;
-            if(this._paint){this._paint=false;save();renderAll();return;}
+            if(this._paint){if(this._pending)this.paintAt(this._pending);this._pending=null;this._paint=false;save();renderAll();return;}
             if(this._moved)return;
             this.tap(p);
         });
@@ -98,7 +113,15 @@ class GameScene extends Phaser.Scene{
         const c=G.cams[v];this.cam.setZoom(c.z);this.cam.centerOn(c.x,c.y);
     }
     saveCam(){if(G.view==='colony')return;const m=this.cam.midPoint;G.cams[G.view]={x:m.x,y:m.y,z:this.cam.zoom};}
-    setZoom(z){const m=this.cam.midPoint,x=m.x,y=m.y;this.cam.setZoom(clamp(z,.4,3));this.cam.centerOn(x,y);}
+    setZoom(z){const c=this.cam,x=c.scrollX+c.width/2,y=c.scrollY+c.height/2;c.setZoom(clamp(z,.4,3));c.centerOn(x,y);this.clampCam();}
+    // keep the comb / map from being dragged off-screen
+    clampCam(){
+        const c=this.cam;let lim;
+        if(G.view==='hive'){let R=1;Object.keys(G.comb).forEach(k=>R=Math.max(R,kdist(k)));lim=HS*S3*(R+1);}
+        else{let R=1;Object.values(G.tiles).forEach(t=>R=Math.max(R,hdist(t.q,t.r)));lim=SZ*S3*(R+1.5);}
+        const x=clamp(c.scrollX+c.width/2,-lim,lim),y=clamp(c.scrollY+c.height/2,-lim,lim);
+        c.setScroll(x-c.width/2,y-c.height/2);
+    }
     zoomBy(d){this.setZoom(this.cam.zoom*(d>0?1.25:.8));}
     fitHive(){
         let R=1;Object.keys(G.comb).forEach(k=>R=Math.max(R,kdist(k)));R+=1;
@@ -221,7 +244,7 @@ class GameScene extends Phaser.Scene{
     burstForage(){Object.keys(G.fa).forEach(k=>{const t=G.tiles[k];if(t&&Math.random()<.5){const p=h2p(t.q,t.r);this.parts.burst(p.x,p.y-8);}});}
 
     update(time,delta){
-        if(!ovOpen()){
+        if(!ovOpen()&&!G.paused){
             G._dt+=delta*G.speed;
             if(G._dt>=3000){G._dt=0;tick();}
         }

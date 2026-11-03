@@ -33,7 +33,11 @@ button{font:inherit;color:inherit;touch-action:manipulation;}
 .hrow2{display:flex;align-items:center;gap:8px;margin-top:6px;}
 #h-date{font:italic .9rem var(--serif);}
 #h-stage{font:10px var(--mono);color:var(--muted);border:1px solid var(--line2);border-radius:10px;padding:2px 8px;}
-#speed-btn{margin-left:auto;background:#162218;border:1px solid var(--line2);border-radius:6px;padding:4px 12px;font:600 .85rem var(--mono);color:var(--amber);}
+.hbtn{background:#162218;border:1px solid var(--line2);border-radius:6px;min-width:44px;min-height:32px;padding:4px 10px;font:600 .85rem var(--mono);color:var(--amber);}
+#pause-btn{margin-left:auto;}
+#pause-btn.on{background:#3a2c0e;border-color:var(--amber);}
+#game canvas{touch-action:none;}
+html,body{overscroll-behavior:none;}
 .alert{margin-top:6px;font-size:.82rem;line-height:1.3;padding:6px 9px;border-radius:6px;height:3.25em;overflow:hidden;display:flex;align-items:center;}
 button:disabled{opacity:.35;}
 .a-ok{background:#101a12;color:var(--faint);font-style:italic;}
@@ -136,7 +140,8 @@ button:disabled{opacity:.35;}
         <div class="hrow2">
             <span id="h-date">Spring · Day 1 · Year 1</span>
             <span id="h-stage">New Swarm</span>
-            <button id="speed-btn" data-a="speed">1×</button>
+            <button id="pause-btn" class="hbtn" data-a="pause">❚❚</button>
+            <button id="speed-btn" class="hbtn" data-a="speed">1×</button>
         </div>
         <div id="h-alert" class="alert a-ok"></div>
     </header>
@@ -146,7 +151,7 @@ button:disabled{opacity:.35;}
         <section id="colony" hidden></section>
         <div id="hivebar" hidden>
             <div class="seg">
-                <button data-a="hmode" data-v="inspect">Inspect</button>
+                <button data-a="hmode" data-v="inspect">Move</button>
                 <button data-a="hmode" data-v="b">Paint brood</button>
                 <button data-a="hmode" data-v="s">Paint storage</button>
                 <button data-a="zoom" data-d="-1">−</button>

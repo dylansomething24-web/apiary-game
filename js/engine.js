@@ -97,7 +97,8 @@ function newState(){
     };
 }
 let G=newState();
-const TRANSIENT=['view','sel','_dt','cams'];
+const TRANSIENT=['view','sel','_dt','cams','paused'];
+const SPEEDS=[0.5,1,2,4];
 const SK='apiary_v6';
 function save(){try{const o={};Object.keys(G).forEach(k=>{if(!TRANSIENT.includes(k))o[k]=G[k];});localStorage.setItem(SK,JSON.stringify(o));}catch(e){}}
 function load(){
