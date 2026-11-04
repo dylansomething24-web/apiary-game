@@ -93,7 +93,7 @@ function makeHive(q,r,name,id){
         fa:{},pa:{},scouts:[],comb:makeComb(),qMode:'normal',newComb:'auto',swarm:0,frad:1,
         combLvl:0,deepDone:0,deepen:false,_dp:0,_bf:0,_df:0,_low:0,_warn:{},
         _nIn:0,_hIn:0,_born:0,_died:0,_wW:false,_w82:false,_wasLow:false,
-        sup:[],_up:false,_sbf:0};
+        sup:[],_up:false,_sbf:0,_rest:0,_log:[]};
 }
 const HFIELDS=Object.keys(makeHive(0,0,'',0)).filter(k=>!['id','q','r','name'].includes(k));
 function bindHive(g){
@@ -131,6 +131,7 @@ function load(){
         G._hid=Math.max(G._hid||1,...G.hives.map(h=>h.id));
         G.view='map';G.sel=null;G._dt=0;G.cams={};G.placing=false;
         if(o._lvl==null){checkLevel(true);G._landPrev=landRank();}   // save from before levels
+        if(G.kp)G.kp.name='Rowan';
         return true;
     }catch(e){return false;}
 }
@@ -286,8 +287,8 @@ const LEVELS=[null,
      inst:'Auto queen',instD:'Every queen follows the seasons on her own: hard in spring, steady in summer, light in fall, resting in winter. She keeps only the brood room she can fill.',
      story:'The colony is no longer one hive. It is spreading.'},
     {name:'The Colony',need:()=>[['Hives founded',G._maxHives,3]],
-     opens:['A beekeeper arrives the next spring','A new Colony page (next update)'],
-     inst:'Jobs and honey',soon:true,instD:'The bees fill their own jobs, forage the best fields, store enough for winter, then build and deepen comb with what is left.',
+     opens:['A beekeeper arrives the next spring','A new Colony page: Hives, Land and Swarms'],
+     inst:'Jobs and honey',instD:'Every hive plans its own day: nurses for the brood, processors for the nectar, guards for the season, and everyone else out to the best fields. Builders only use honey above the winter reserve, building comb first and then deepening it. Pollinators and scouts are still yours to send.',
      story:'Three hives, one colony. The bees begin to look after themselves.'},
 ];
 const MAX_LEVEL=LEVELS.length-1;

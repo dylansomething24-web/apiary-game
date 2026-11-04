@@ -37,7 +37,7 @@ const CAND_WAX=(0.1+0.1+0.5)/3;
 function newKeeper(hh){
     const c={};
     ['in','unc','ext','tank','bot','out'].forEach((k,i)=>{const[q,r]=ringCells(1)[i];c[hkey(q,r)]={k,lv:1,tray:[],h:0,w:0,prog:0};});
-    return{name:'',money:0,debt:0,hh,since:G.year,
+    return{name:'Rowan',money:0,debt:0,hh,since:G.year,
         st:{u:6,d:0,l1:0,l2:0,full:[],wax:0,boards:0,pint:24,quart:12,wick:0},shelf:12,
         goods:{pint:0,quart:0,block:0,votive:0,pillar:0},
         fl:{R:1,c},bk:{at:null,txt:'Waiting for the first supers'},
@@ -527,14 +527,13 @@ function keeperArrive(){
     $('kp-where').textContent=site.camp
         ?'There are no old buildings nearby, so the beekeeper makes camp beside the home hive.'
         :'They set up in the old building nearby. It will be the Honey House.';
-    $('kp-name-in').value='';
     ovShow('ov-k');
     if(window._S){setView('map');window._S.truck(site.k);}
 }
 function keeperBegin(){
-    const nm=$('kp-name-in').value.trim();K().name=nm||'The beekeeper';
+    K().name='Rowan';
     ovHide('ov-k');renderAll();
-    toast(`${K().name} has 6 empty supers. Open Supers and put them on your hives.`,'mile');
+    toast(`Rowan has 6 empty supers. Open Supers and put them on your hives.`,'mile');
 }
 // short guided steps, each shown only once it matters
 const GUIDE=['Put your first supers on. Open Supers, then tap an empty slot.',

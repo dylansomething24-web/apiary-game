@@ -29,7 +29,7 @@ function tick(){
 
     // every hive lives its own day
     const viewing=G.hives[G.ci];
-    G.hives.slice().forEach(h=>{G.ci=G.hives.indexOf(h);_ctx=G.hives.length>1?h.name:null;hiveDay();});
+    G.hives.slice().forEach(h=>{G.ci=G.hives.indexOf(h);_ctx=G.hives.length>1?h.name:null;if(instinctOn())planJobs();hiveDay();});
     _ctx=null;
     if(G.kp)keeperDay();
 
@@ -305,6 +305,7 @@ function sendScout(k){
     if(!scoutable(k)){toast('Scouts can only reach dark tiles touching your land','warn');return;}
     if(G.scouts.length>=3){toast('Three scout teams are already out','warn');return;}
     if(G.scouts.find(s=>s.k===k)){toast('Scouts are already heading there','warn');return;}
+    if(instinctOn())freeForagers(SCOUT_BEES);
     if(idle()<SCOUT_BEES){toast(`Need ${SCOUT_BEES} idle bees to scout`,'warn');return;}
     G.scouts.push({k,days:SCOUT_DAYS,n:SCOUT_BEES});
     toast(`Scouts are out — back in ${SCOUT_DAYS} days`,'green');

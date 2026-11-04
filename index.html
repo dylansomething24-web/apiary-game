@@ -110,6 +110,21 @@ button:disabled{opacity:.35;}
 .wide.off{opacity:.5;}
 .slide{width:100%;margin:10px 0 4px;accent-color:var(--amber);}
 
+/* Level 5 Colony page */
+.hrow5{border-top:1px solid var(--line);}
+.card h3+.hrow5{border-top:none;}
+.hhead{display:grid;grid-template-columns:12px 1fr auto;grid-template-rows:auto auto;column-gap:8px;align-items:center;width:100%;background:none;border:none;text-align:left;padding:10px 0;}
+.hhead .dot{grid-row:1/3;width:10px;height:10px;border-radius:50%;}
+.hhead .hsum{grid-column:2;font:12px var(--mono);color:var(--muted);margin-top:2px;}
+.hhead .chev{grid-column:3;grid-row:1/3;color:var(--muted);}
+.d-ok{background:var(--good);}.d-info{background:var(--blue);}.d-warn{background:var(--warn);}.d-bad{background:var(--bad);}
+.hdet{padding:0 0 12px 20px;}
+.jobgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:4px 0 6px;}
+.jobgrid div{background:#162218;border-radius:6px;padding:6px 4px;text-align:center;}
+.jobgrid b{display:block;font:700 1rem var(--mono);color:var(--amber);}
+.jobgrid span{font-size:.72rem;color:var(--muted);}
+.logl{margin:2px 0;}
+
 /* Main area */
 #main{flex:1;position:relative;overflow:hidden;}
 #game{position:absolute;inset:0;}
@@ -312,11 +327,10 @@ button:disabled{opacity:.35;}
     <div class="ov-card">
         <div class="pl-n">Spring</div>
         <h2>The Beekeeper</h2>
-        <p>A truck comes up the old dirt road and stops at the edge of the meadow. Someone climbs out and stands a long while, watching your bees.</p>
+        <p>A truck comes up the old dirt road and stops at the edge of the meadow. A beekeeper named Rowan climbs out and stands a long while, watching your bees.</p>
         <p id="kp-where"></p>
-        <p>They brought six empty supers, a knife, a hand extractor, buckets and 36 jars. And no money at all.</p>
-        <input class="ov-inp" id="kp-name-in" placeholder="Name the beekeeper (optional)">
-        <button class="ov-btn" data-a="kpbegin">Welcome them</button>
+        <p>Rowan brought six empty supers, a knife, a hand extractor, buckets and 36 jars. And no money at all.</p>
+        <button class="ov-btn" data-a="kpbegin">Welcome Rowan</button>
     </div>
 </div>
 
@@ -337,6 +351,7 @@ button:disabled{opacity:.35;}
 <script src="phaser.min.js"></script>
 <script src="js/engine.js"></script>
 <script src="js/tick.js"></script>
+<script src="js/instinct.js"></script>
 <script src="js/keeper.js"></script>
 <script src="js/ui.js"></script>
 <script src="js/keeperui.js"></script>
