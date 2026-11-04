@@ -21,6 +21,7 @@ function tick(){
             G._wintersS++;
             G.hives.forEach(h=>{h._wW=false;h._w82=false;});
             toast('Spring. The queen begins laying again.','green');
+            if(G._kDue&&!G.kp)setTimeout(keeperArrive,1800);
         }
         if(ns==='Winter')toast('Winter. No foraging, no laying — the colony lives on stored honey.','warn');
         if(ns==='Fall')toast('Fall. Flowers are thinning. Fill your storage cells before winter.','warn');
@@ -30,6 +31,7 @@ function tick(){
     const viewing=G.hives[G.ci];
     G.hives.slice().forEach(h=>{G.ci=G.hives.indexOf(h);_ctx=G.hives.length>1?h.name:null;hiveDay();});
     _ctx=null;
+    if(G.kp)keeperDay();
 
     // hives that died
     G.hives.filter(h=>h.dead).forEach(h=>{
@@ -51,6 +53,7 @@ function tick(){
     }
 
     checkLevel();checkLand();
+    if(G._lvl>=5&&!G.kp&&!G._kDue)G._kDue=true;   // the beekeeper comes the next spring
     checkMS();Snd.setVol();save();
     if(window._S){window._S.refresh();if(H()._hIn>0.2&&G.view==='map')window._S.burstForage();}
     renderAll(true);
@@ -58,13 +61,14 @@ function tick(){
 
 // ── ONE HIVE'S DAY (G.* is the hive being processed) ──────────────────────────
 function hiveDay(){
+    if(G.kp)superFlow();
     const e=econ();
 
     // Foragers bring nectar home (only as much as storage can hold)
     const space=Math.max(0,e.cap-G.honey-G.nectar);
     let nIn=e.nectarIn;
     if(nIn>space+0.001){
-        if(nIn>0)warnOnce('full','Storage is full — nectar is being wasted. Add builders or paint storage cells in the Hive.');
+        if(nIn>0&&!(G.kp&&supRoom()>1))warnOnce('full',G.kp?'Storage is full — nectar is being wasted. Put supers on, or pull full ones.':'Storage is full — nectar is being wasted. Add builders or paint storage cells in the Hive.');
         nIn=space;
     }
     G.nectar+=nIn;G._nIn=nIn;
@@ -130,6 +134,8 @@ function hiveDay(){
         if(G._bf>2)G._bf=2;
     }
 
+    if(G.kp)superBuild();
+
     // Queen lays into empty brood cells, nearest the centre first
     if(G.season!=='Winter'&&G.honey>0){
         let n=layNow();
@@ -141,7 +147,8 @@ function hiveDay(){
     // Natural deaths
     G._df+=G.bees*{Spring:.012,Summer:.012,Fall:.008,Winter:.004}[G.season];
     const died=Math.floor(G._df);G._df-=died;G.bees-=died;
-    // Starvation
+    // Starvation (in winter a hive will eat from its supers first)
+    if(G.kp)eatSupers();
     if(G.honey<0){
         G.honey=0;const s=Math.max(1,Math.floor(G.bees*.05));G.bees-=s;
         warnOnce('starve',`The colony is starving — ${s} bee${s>1?'s':''} died. Get foragers and processors working.`,3);
@@ -160,6 +167,7 @@ function hiveDay(){
         toast(`The colony swarmed — the old queen left with ${lost} bees. A new queen takes over.`,'warn');hap([100,50,100]);
     }
 
+    if(G.kp)superFlow();
     rebalance();
 
     // Scouts

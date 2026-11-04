@@ -111,11 +111,11 @@ class GameScene extends Phaser.Scene{
         this.applyCam('map');
     }
     applyCam(v){
-        if(v==='colony')return;
+        if(v==='colony'||v==='supers'||v==='house')return;
         if(v==='hive'&&!G.cams.hive){this.fitHive();return;}
         const c=G.cams[v];this.cam.setZoom(c.z);this.cam.centerOn(c.x,c.y);
     }
-    saveCam(){if(G.view==='colony')return;const m=this.cam.midPoint;G.cams[G.view]={x:m.x,y:m.y,z:this.cam.zoom};}
+    saveCam(){if(G.view==='colony'||G.view==='supers'||G.view==='house')return;const m=this.cam.midPoint;G.cams[G.view]={x:m.x,y:m.y,z:this.cam.zoom};}
     setZoom(z){const c=this.cam,x=c.scrollX+c.width/2,y=c.scrollY+c.height/2;c.setZoom(clamp(z,.4,3));c.centerOn(x,y);this.clampCam();}
     // keep the comb / map from being dragged off-screen
     clampCam(){
@@ -202,6 +202,8 @@ class GameScene extends Phaser.Scene{
             else if(t.type==='CLOVER'){const n=s>=2?3:s>=1?2:1;[[0,-4],[-10,7],[10,7]].slice(0,n).forEach(([dx,dy])=>{g.fillStyle(0xe8e8f0,.9);[[0,-3],[-3,2],[3,2]].forEach(([a,b])=>g.fillCircle(x+dx+a,y+dy+b,2.6));});}
             else if(t.type==='WILDFLOWER'){const pts=[[0,0,0xe85090],[-12,6,0xf0c030],[12,6,0xa070e0],[-6,-10,0xf0f0f0],[8,-9,0xe85090]];pts.slice(0,s+2).forEach(([dx,dy,c])=>{g.fillStyle(c,.9);g.fillCircle(x+dx,y+dy,3);});}
             else if(t.type==='FOREST'){[-9,0,9].slice(0,s+1).forEach(dx=>{g.fillStyle(0x1e6a2a,1);g.fillTriangle(x+dx,y-12,x+dx-7,y+6,x+dx+7,y+6);});}
+            if(G.kp&&G.kp.mills[k]){g.fillStyle(0x6a4a2a,1);g.fillRect(x-11,y+1,22,9);g.lineStyle(2,0xd8c8a0,1);g.strokeCircle(x+4,y-4,6);g.lineBetween(x+4,y-10,x+4,y+2);}
+            if(G.kp&&G.kp.hh===k){g.fillStyle(0xc89a40,1);g.fillRect(x-9,y-3,18,12);g.fillStyle(0x8a3a20,1);g.fillTriangle(x-12,y-3,x+12,y-3,x,y-14);g.fillStyle(0x3a2208,1);g.fillRect(x-2,y+3,5,6);}
             if(t.type==='HIVE_BOX'){
                 const me=H(),act=t.q===me.q&&t.r===me.r;
                 g.fillStyle(act?0xf0b030:0xb88a28,1);g.fillCircle(x,y,9);g.lineStyle(act?3:1.5,act?0xffe080:0xa08040,1);g.strokeCircle(x,y,13);
@@ -258,6 +260,14 @@ class GameScene extends Phaser.Scene{
     refresh(){
         if(G.view==='hive'){this.drawHive();return;}
         this.drawMap();this.drawLabels();this.bees.sync();
+    }
+    // the beekeeper's truck rolls in from the edge of the map
+    truck(k){
+        const t=G.tiles[k];if(!t)return;const p=h2p(t.q,t.r);
+        let R=1;Object.values(G.tiles).forEach(o=>R=Math.max(R,hdist(o.q,o.r)));
+        const sx=-SZ*S3*(R+1.5),tr=this.add.text(sx,p.y+SZ*.2,'🛻',{font:'26px serif'}).setOrigin(.5).setDepth(8).setScale(-1,1);
+        this.cam.centerOn(p.x*.5,p.y*.5);
+        this.tweens.add({targets:tr,x:p.x-SZ*.6,duration:3200,ease:'Sine.easeOut',onComplete:()=>this.tweens.add({targets:tr,alpha:0,delay:1500,duration:800,onComplete:()=>tr.destroy()})});
     }
     rebuild(){this.bees.clear();this.parts.clear();this.bees.sig='';this.resetCams();this.refresh();}
     burstForage(){Object.keys(G.fa).forEach(k=>{const t=G.tiles[k];if(t&&Math.random()<.5){const p=h2p(t.q,t.r);this.parts.burst(p.x,p.y-8);}});}

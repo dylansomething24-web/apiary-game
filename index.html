@@ -79,6 +79,37 @@ button:disabled{opacity:.35;}
 .lv-inst span{display:block;font-size:.88rem;color:var(--muted);line-height:1.45;}
 .lv-note{color:var(--amber2)!important;font-style:italic;}
 
+/* Beekeeper */
+#h-money{font:600 .8rem var(--mono);color:var(--good);border:1px solid #2e5a38;border-radius:10px;padding:2px 8px;white-space:nowrap;cursor:pointer;}
+#h-money.bad{color:var(--bad);border-color:#5a2a24;}
+.pane{position:absolute;inset:0;background:var(--bg);display:flex;flex-direction:column;}
+.pbody{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px 12px 24px;display:flex;flex-direction:column;gap:12px;}
+.subtabs{flex:none;display:flex;gap:2px;padding:8px 6px 0;border-bottom:1px solid var(--line);background:#0b130c;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;}
+.subtabs button{flex:1 1 auto;min-height:40px;padding:6px 4px;background:transparent;border:1px solid transparent;border-bottom:none;border-radius:8px 8px 0 0;font:italic .84rem var(--serif);color:var(--muted);white-space:nowrap;}
+.subtabs button.on{background:var(--bg);border-color:var(--line2);color:var(--amber);margin-bottom:-1px;}
+.tab{font-size:.92rem;}
+.guide{border-color:#5a6a2a;background:#161f0e;}
+.guide b{display:block;font:11px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--amber2);margin-bottom:4px;}
+.guide span{font-size:.92rem;line-height:1.4;}
+.supbox{padding:10px 0;border-top:1px solid var(--line);}
+.card h3+.supbox,.card .note+.supbox{border-top:none;}
+.supbox.empty .rname{color:var(--muted);}
+.supsvg{display:block;max-width:360px;margin:6px auto 2px;}
+.lvtag{font:11px var(--mono);color:var(--amber2);border:1px solid var(--line2);border-radius:8px;padding:1px 6px;margin-left:4px;}
+.seg button small{display:block;font:11px var(--mono);color:var(--muted);}
+.seg.five{grid-template-columns:repeat(5,1fr);}
+.hh-top{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;font:600 1.1rem var(--mono);color:var(--good);padding:0 2px;}
+.hh-top .sub{font:italic .85rem var(--serif);color:var(--muted);font-weight:400;}
+.flcard{padding:8px;}
+.floorsvg{display:block;max-width:420px;margin:0 auto;}
+.floorsvg g{cursor:pointer;}
+.fl-t{fill:#f0e2b8;text-anchor:middle;font-family:var(--serif);font-style:italic;}
+.fl-l{fill:#c8b880;text-anchor:middle;font-family:var(--mono);}
+.buybtn{min-width:56px;min-height:40px;padding:4px 8px;background:#1a281d;border:1px solid var(--line2);border-radius:8px;font:600 .82rem var(--mono);color:var(--amber2);white-space:nowrap;}
+.fs .buybtn{width:auto;}
+.wide.off{opacity:.5;}
+.slide{width:100%;margin:10px 0 4px;accent-color:var(--amber);}
+
 /* Main area */
 #main{flex:1;position:relative;overflow:hidden;}
 #game{position:absolute;inset:0;}
@@ -191,6 +222,7 @@ button:disabled{opacity:.35;}
         <div class="hrow2">
             <span id="h-date">Spring · Day 1 · Year 1</span>
             <span id="h-stage" data-a="progress">Lv 1 · New Swarm ›</span>
+            <span id="h-money" data-a="view" data-v="house" hidden>$0</span>
             <button id="pause-btn" class="hbtn" data-a="pause">❚❚</button>
             <button id="speed-btn" class="hbtn" data-a="speed">1×</button>
         </div>
@@ -201,6 +233,8 @@ button:disabled{opacity:.35;}
     <main id="main">
         <div id="game"></div>
         <section id="colony" hidden><nav id="ctabs"></nav><div id="cbody"></div></section>
+        <section id="supers" class="pane" hidden><div id="sbody" class="pbody"></div></section>
+        <section id="house" class="pane" hidden><nav id="htabs" class="subtabs"></nav><div id="hbody" class="pbody"></div></section>
         <div id="hivebar" hidden>
             <div class="seg">
                 <button data-a="hmode" data-v="inspect">Move</button>
@@ -231,8 +265,9 @@ button:disabled{opacity:.35;}
 
     <nav id="tabs">
         <button class="tab on" data-a="view" data-v="map">Map</button>
-        <button class="tab" data-a="view" data-v="hive">Hive</button>
+        <button class="tab" id="tab-hive" data-a="view" data-v="hive">Hive</button>
         <button class="tab" data-a="view" data-v="colony">Colony</button>
+        <button class="tab" id="tab-house" data-a="view" data-v="house" hidden>Honey House</button>
     </nav>
 </div>
 
@@ -273,6 +308,18 @@ button:disabled{opacity:.35;}
     </div>
 </div>
 
+<div class="ov" id="ov-k">
+    <div class="ov-card">
+        <div class="pl-n">Spring</div>
+        <h2>The Beekeeper</h2>
+        <p>A truck comes up the old dirt road and stops at the edge of the meadow. Someone climbs out and stands a long while, watching your bees.</p>
+        <p id="kp-where"></p>
+        <p>They brought six empty supers, a knife, a hand extractor, buckets and 36 jars. And no money at all.</p>
+        <input class="ov-inp" id="kp-name-in" placeholder="Name the beekeeper (optional)">
+        <button class="ov-btn" data-a="kpbegin">Welcome them</button>
+    </div>
+</div>
+
 <div class="ov" id="ov-g">
     <div class="ov-card">
         <h2>The Colony Has Fallen</h2>
@@ -290,7 +337,9 @@ button:disabled{opacity:.35;}
 <script src="phaser.min.js"></script>
 <script src="js/engine.js"></script>
 <script src="js/tick.js"></script>
+<script src="js/keeper.js"></script>
 <script src="js/ui.js"></script>
+<script src="js/keeperui.js"></script>
 <script src="js/scene.js"></script>
 </body>
 </html>

@@ -36,7 +36,12 @@ function alerts(e){
         ?['info','Brood cells are full — the queen waits while builders add comb.']
         :['warn','No empty brood cells — the queen can’t lay. Add builders or paint brood cells.']);
     if(G.swarm>=60&&G.season!=='Winter')out.push(['warn',canSplit().ok?'Swarm pressure is high — split off a new hive in Colony → Queen.':'Swarm pressure is high — raise a swarm cell in Colony → Queen.']);
-    if(G.honey+G.nectar>=e.cap-0.5&&e.nectarIn>0)out.push(['warn','Storage full — add builders or paint storage cells.']);
+    if(G.kp&&G.season!=='Winter'){
+        if(G.sup.some(supFull))out.push(['warn',G.sup.length<MAX_SUP&&boxesStored()?'A super is 90% full. Pull it or add another.':'A super is 90% full. Pull it to make room.']);
+        if(G._up&&!G.sup.length&&!boxesStored())out.push(['warn','No spare supers in the Storehouse.']);
+        else if(!G.sup.length&&boxesStored())out.push(['info','This hive has no supers. Put some on in Supers.']);
+    }
+    if(G.honey+G.nectar>=e.cap-0.5&&e.nectarIn>0&&!(G.kp&&supRoom()>1))out.push(['warn',G.kp?'Brood box and supers are full. Add or pull supers.':'Storage full — add builders or paint storage cells.']);
     if(G.nectar>4&&e.nectarIn>e.procCap)out.push(['warn','Nectar is piling up — add processors.']);
     if(G.season==='Fall'&&G.honey<winterNeed())out.push(['warn',`Winter needs ~${winterNeed()} lb honey — you have ${G.honey.toFixed(0)}.`]);
     if(foragerTotal()===0&&G.season!=='Winter')out.push(['info','No foragers out — tap a flower tile next to the hive, or use Colony → Land.']);
@@ -54,7 +59,11 @@ function hud(e,fromTick){
     const net=$('h-net');net.textContent=sgn(e.net)+'/day';net.className='hv '+(e.net>=0?'good':'bad');
     $('h-date').textContent=`${G.season} · Day ${dayInSeason(G.day)} · Year ${G.year}`;
     $('h-date').style.color=SCOL[G.season];
-    $('h-stage').textContent=`Lv ${G._lvl} · ${LEVELS[G._lvl].name} ›`;
+    $('h-stage').textContent=G.kp?`Lv ${G._lvl} ›`:`Lv ${G._lvl} · ${LEVELS[G._lvl].name} ›`;
+    const kp=G.kp;$('h-money').hidden=!kp;
+    if(kp){$('h-money').textContent='$'+money(kp.money)+(kp.debt?' · owe $'+money(kp.debt):'');$('h-money').classList.toggle('bad',kp.debt>0);}
+    $('tab-house').hidden=!kp;const t2=$('tab-hive');t2.textContent=kp?'Supers':'Hive';t2.dataset.v=kp?'supers':'hive';
+    document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on',t.dataset.v===G.view||(G.view==='hive'&&t.id==='tab-hive')));
     $('speed-btn').textContent=(G.speed===0.5?'½':G.speed)+'×';
     const pb=$('pause-btn');pb.textContent=G.paused?'▶ Play':'❚❚';pb.classList.toggle('on',!!G.paused);    // the most urgent problem in any hive
     const rank={bad:0,warn:1,info:2};let best=null;const first=[];
@@ -85,6 +94,7 @@ const ACT={
     fa(d){
         const k=d.k,delta=+d.d,t=G.tiles[k];
         if(delta>0){
+            if(isMill(k)){toast('The bees no longer forage where a mill stands','warn');return;}
             if(!inRange(t)){toast('Too far — the colony needs more bees to reach it','warn');return;}
             const room=tileSlots(k)-tileForagers(k);
             if(room<=0){toast('This field is full — more bees would only crowd it. Try another tile.','warn');return;}
@@ -96,7 +106,7 @@ const ACT={
     farecallall(){G.fa={};},
     autoforage(){
         let n=idle();if(!n){toast('No idle bees to send','warn');return;}
-        const ks=Object.keys(G.tiles).filter(k=>inRange(G.tiles[k])&&TD[G.tiles[k].type].forage).sort((a,b)=>tileYield(b)-tileYield(a));
+        const ks=Object.keys(G.tiles).filter(k=>inRange(G.tiles[k])&&TD[G.tiles[k].type].forage&&!isMill(k)).sort((a,b)=>tileYield(b)-tileYield(a));
         if(!ks.length){toast('No flowers in range','warn');return;}
         let sent=0,used=0;
         for(const k of ks){if(n<=0)break;const room=tileSlots(k)-tileForagers(k);if(room<=0)continue;const m=Math.min(room,n);G.fa[k]=(G.fa[k]||0)+m;n-=m;sent+=m;used++;}
@@ -119,7 +129,7 @@ const ACT={
     zoom(d){if(window._S)window._S.zoomBy(+d.d);},
     fit(){if(window._S)window._S.fitHive();},
     cellset(d){setCell(d.k,d.v);},
-    view(d){if(d.t)G.ctab=d.t;setView(d.v);},
+    view(d){if(d.t)G.ctab=d.t;if(d.h)G.htab=d.h;setView(d.v);},
     ctab(d){G.ctab=d.v;},
     deepen(){
         if((G.combLvl||0)>=DEEP_CAPS.length-1)return;
@@ -181,7 +191,7 @@ function setView(v){
     if(window._S)window._S.saveCam();
     G.view=v;if(v!=='map')G.placing=false;closePanel();
     document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on',t.dataset.v===v));
-    $('colony').hidden=v!=='colony';
+    $('colony').hidden=v!=='colony';$('supers').hidden=v!=='supers';$('house').hidden=v!=='house';
     $('hivebar').hidden=v!=='hive';
     if(window._S)window._S.showView(v);
     renderAll();
@@ -195,6 +205,8 @@ function renderAll(fromTick){
     if(fromTick&&performance.now()<_holdUntil)return;
     if(G.view==='colony')renderColony(e);
     if(G.view==='hive')renderHivebar();
+    if(G.view==='supers')renderSupers();
+    if(G.view==='house')renderHouse();
     if(G.sel)renderPanel(e);
 }
 
@@ -429,7 +441,7 @@ function renderPanel(e){
             title=hv.name;
             body=hi===G.ci||hi<0
               ?`<div class="kv"><span>Bees</span><b>${G.bees} (${idle()} idle)</b></div><div class="kv"><span>Honey</span><b>${f1(G.honey)} lb</b></div>
-                ${btn('Manage workers','view','data-v="colony" data-t="workers"','wide')}${btn('Look inside the hive','view','data-v="hive"','wide')}`
+                ${btn('Manage workers','view','data-v="colony" data-t="workers"','wide')}${G.kp?btn('Supers','view','data-v="supers"','wide'):''}${btn('Look inside the hive','view','data-v="hive"','wide')}`
               :`<div class="kv"><span>Bees</span><b>${hv.bees}</b></div><div class="kv"><span>Honey</span><b>${f1(hv.honey)} lb</b></div>
                 ${btn('Go to this hive','gohive',`data-i="${hi}"`,'wide')}`;
         }else if(t.type==='DEAD_ZONE'){
@@ -438,6 +450,11 @@ function renderPanel(e){
               (G._lvl<2?`<p class="note warn">Pollinators open at Level 2, after your first winter.</p>`:
                !ok?`<p class="note warn">Out of range (${dist} hexes). Range grows with colony size.</p>`:
                `<div class="row"><div class="row-top"><span class="rname">Pollinators</span><span class="rnum">${n}</span></div>${steps('pa',`data-k="${k}"`)}</div>`);
+        }else if(isMill(k)){
+            const m=G.kp.mills[k];title=MILL[m.lv].name;
+            body=`<p class="desc">A lumber mill on a Thriving forest edge. The bees no longer forage here.</p>
+              <div class="kv"><span>Boards on site</span><b>${Math.floor(m.boards+m.pool)}</b></div><div class="kv"><span>Supers on site</span><b>${m.sup}</b></div>
+              ${m.why?`<p class="note warn">${m.why}</p>`:''}${btn('Manage in the Honey House','view','data-v="house" data-h="store"','wide')}`;
         }else if(d.forage){
             const n=G.fa[k]||0,y=tileYield(k);
             body=`<div class="chips"><span class="chip">${STG[t.stage]}</span>${hasWater(t)?'<span class="chip blue">water +10%</span>':''}<span class="chip">${dist} hex out</span><span class="chip">${Math.round(Math.max(.4,1-DIST_LOSS*(Math.max(1,dist)-1))*100)}% load</span></div>
@@ -447,8 +464,13 @@ function renderPanel(e){
             (!ok?`<p class="note warn">Out of range. Your bees reach ${G.frad} hex${G.frad>1?'es':''}; range grows at 100 bees.</p>`:
             `<div class="row"><div class="row-top"><span class="rname">Foragers here</span><span class="rnum">${n}</span></div>
              <div class="rdesc">${f1(y*n)} lb nectar/day · ${idle()} idle bees at home</div>${steps('fa',`data-k="${k}"`)}</div>
-             ${btn('Recall all','farecall',`data-k="${k}" ${n?'':'disabled'}`,'wide ghost')}`);
+             ${btn('Recall all','farecall',`data-k="${k}" ${n?'':'disabled'}`,'wide ghost')}`)+
+            (G.kp&&t.type==='FOREST'?(t.stage>=3?`<div class="row"><div class="rname">Lumber mill</div><div class="rdesc">Build a sawpit here for $${money(MILL[1].cost)}. It makes boards and supers, and the bees stop foraging this tile for good.</div>${btn('Build a sawpit','millbuild',`data-k="${k}"`,'wide')}</div>`:'<p class="hint">A lumber mill can go here once this forest is Thriving.</p>'):'');
         }else body=`<p class="desc">${d.desc}</p>`;
+    }
+    if(s.kind==='tile'&&G.kp&&s.k===G.kp.hh){
+        title=G.kp.camp?'Beekeeper’s camp':'Honey House';
+        body=`<p class="desc">Where ${G.kp.name||'the beekeeper'} uncaps, extracts and bottles the honey.</p>${btn('Open the Honey House','view','data-v="house"','wide')}`+body;
     }
     $('panel-title').textContent=title;$('panel-body').innerHTML=body;
 }

@@ -1,8 +1,8 @@
 // Network-first: always try for the newest files, fall back to cache offline.
-const CACHE = 'apiary-v15';
+const CACHE = 'apiary-v16';
 const BASE = self.registration.scope;
 const ASSETS = ['', 'index.html', 'manifest.json', 'phaser.min.js',
-    'js/engine.js', 'js/tick.js', 'js/ui.js', 'js/scene.js',
+    'js/engine.js', 'js/tick.js', 'js/keeper.js', 'js/ui.js', 'js/keeperui.js', 'js/scene.js',
     'icons/icon-192.png', 'icons/icon-512.png'].map(p => BASE + p);
 
 self.addEventListener('install', e => {

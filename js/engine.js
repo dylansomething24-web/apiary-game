@@ -92,7 +92,8 @@ function makeHive(q,r,name,id){
         bees:15,honey:10,nectar:0,nurses:3,processors:2,builders:1,guards:0,
         fa:{},pa:{},scouts:[],comb:makeComb(),qMode:'normal',newComb:'auto',swarm:0,frad:1,
         combLvl:0,deepDone:0,deepen:false,_dp:0,_bf:0,_df:0,_low:0,_warn:{},
-        _nIn:0,_hIn:0,_born:0,_died:0,_wW:false,_w82:false,_wasLow:false};
+        _nIn:0,_hIn:0,_born:0,_died:0,_wW:false,_w82:false,_wasLow:false,
+        sup:[],_up:false,_sbf:0};
 }
 const HFIELDS=Object.keys(makeHive(0,0,'',0)).filter(k=>!['id','q','r','name'].includes(k));
 function bindHive(g){
@@ -111,6 +112,7 @@ function newState(){
         season:'Spring',day:1,year:1,speed:1,
         _nt:30,_totH:0,_peakB:15,_ach:{},
         _wintersS:0,_tilesRestored:0,_colonyName:'',_lvl:1,_maxHives:1,_landPrev:0,
+        kp:null,_kDue:false,
         view:'map',sel:null,_dt:0,cams:{},
     });
 }
@@ -159,8 +161,9 @@ function tileForagers(k){let n=0;for(const h of G.hives)n+=h.fa[k]||0;return n;}
 function tileSlots(k){const t=G.tiles[k];return t?TILE_SLOTS[t.stage]:0;}
 function guardsNeeded(){return Math.max(2,Math.ceil(G.bees/30));}
 // nectar one forager of the ACTIVE hive brings from tile k: flight cost by distance, shared by everyone on the tile
+function isMill(k){return!!(G.kp&&G.kp.mills[k]);}
 function tileYield(k){
-    const t=G.tiles[k];if(!t)return 0;const d=TD[t.type];if(!d.forage)return 0;
+    const t=G.tiles[k];if(!t||isMill(k))return 0;const d=TD[t.type];if(!d.forage)return 0;
     const water=nbrs(t.q,t.r).some(([q,r])=>{const n=G.tiles[hkey(q,r)];return n&&n.type==='WATER';});
     const flight=Math.max(.4,1-DIST_LOSS*(Math.max(1,hiveDist(t))-1));
     const tot=tileForagers(k),slots=tileSlots(k),crowd=tot>slots?slots/tot:1;
@@ -283,7 +286,7 @@ const LEVELS=[null,
      inst:'Auto queen',instD:'Every queen follows the seasons on her own: hard in spring, steady in summer, light in fall, resting in winter. She keeps only the brood room she can fill.',
      story:'The colony is no longer one hive. It is spreading.'},
     {name:'The Colony',need:()=>[['Hives founded',G._maxHives,3]],
-     opens:['A new Colony page (next update)'],
+     opens:['A beekeeper arrives the next spring','A new Colony page (next update)'],
      inst:'Jobs and honey',soon:true,instD:'The bees fill their own jobs, forage the best fields, store enough for winter, then build and deepen comb with what is left.',
      story:'Three hives, one colony. The bees begin to look after themselves.'},
 ];
