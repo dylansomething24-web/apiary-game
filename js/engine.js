@@ -17,7 +17,6 @@ const LARVA_COST=0.04;   // lb honey per larva per day
 const ADULT_COST=0.04,WINTER_COST=0.06;
 const FORAGE_K=0.07;     // nectar per bee per forage point per day
 const MAX_COMB_R=12;      // 469 cells
-const SCOUT_BEES=2,SCOUT_DAYS=3;
 const TILE_SLOTS=[8,12,16,20];   // foragers one tile can feed per day, by health stage (all hives together)
 const DIST_LOSS=0.08;    // each tile beyond the first costs a forager 8% of its load (flight effort)
 const PA_RATE=1.0;       // % of a dead zone one pollinator restores per day
@@ -109,7 +108,7 @@ function newState(){
         tiles,fog:makeFog(tiles),restore:{},
         hives:[home],ci:0,_hid:1,
         hmode:'inspect',
-        season:'Spring',day:1,year:1,speed:1,
+        season:'Spring',day:1,year:1,speed:1,_spd2:true,trips:[],_tid:0,
         _nt:30,_totH:0,_peakB:15,_ach:{},
         _wintersS:0,_tilesRestored:0,_colonyName:'',_lvl:1,_maxHives:1,_landPrev:0,
         kp:null,_kDue:false,
@@ -118,9 +117,18 @@ function newState(){
 }
 let G=newState();
 const TRANSIENT=['view','sel','_dt','cams','paused','ctab','placing'];
-const SPEEDS=[0.5,1,2,4];
+const SPEEDS=[0.5,1,2,3,6];   // 1x is half the old pace
 const SK='apiary_v6';
-function save(){try{const o={};Object.keys(G).forEach(k=>{if(!TRANSIENT.includes(k))o[k]=G[k];});localStorage.setItem(SK,JSON.stringify(o));}catch(e){}}
+function save(){try{const o={};Object.keys(G).forEach(k=>{if(!TRANSIENT.includes(k))o[k]=G[k];});localStorage.setItem(SK,JSON.stringify(o));}catch(e){}lifeSave();}
+// lifetime record: kept under its own key, so it survives replays
+const LK='apiary_life';
+function lifeRec(){
+    let L=null;try{L=JSON.parse(localStorage.getItem(LK));}catch(e){}
+    L=Object.assign({runs:1,lvl:0,hives:0,bees:0,years:0},L||{});
+    L.lvl=Math.max(L.lvl,G._lvl);L.hives=Math.max(L.hives,G._maxHives||1);L.bees=Math.max(L.bees,G._peakB);L.years=Math.max(L.years,G._wintersS);
+    return L;
+}
+function lifeSave(L){try{localStorage.setItem(LK,JSON.stringify(L||lifeRec()));}catch(e){}}
 function load(){
     try{const raw=localStorage.getItem(SK);if(!raw)return false;
         const o=JSON.parse(raw);const base=newState();
@@ -132,6 +140,9 @@ function load(){
         G.view='map';G.sel=null;G._dt=0;G.cams={};G.placing=false;
         if(o._lvl==null){checkLevel(true);G._landPrev=landRank();}   // save from before levels
         if(G.kp)G.kp.name='Rowan';
+        if(!o._spd2){G.speed={0.5:1,1:2,2:3,4:6}[o.speed]||2;G._spd2=true;}   // old speeds onto the new set
+        // scouts from before area trips: let them finish now
+        G.hives.forEach(h=>{h.scouts.filter(s=>s.k).forEach(s=>withHive(h,()=>revealTile(s.k,true)));h.scouts=h.scouts.filter(s=>!s.k);});
         return true;
     }catch(e){return false;}
 }
@@ -404,6 +415,7 @@ function beginGame(){
     toast('Tap a green flower tile next to the hive to send foragers','green');
 }
 function newGame(){
+    const L=lifeRec();L.runs++;lifeSave(L);
     G=newState();save();
     ['ov-g','ov-c'].forEach(ovHide);
     if(window._S)window._S.rebuild();

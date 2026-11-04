@@ -22,7 +22,9 @@ function tick(){
             G.hives.forEach(h=>{h._wW=false;h._w82=false;});
             toast('Spring. The queen begins laying again.','green');
             if(G._kDue&&!G.kp)setTimeout(keeperArrive,1800);
+            springOut();
         }
+        if(ns==='Winter')winterHome();
         if(ns==='Winter')toast('Winter. No foraging, no laying — the colony lives on stored honey.','warn');
         if(ns==='Fall')toast('Fall. Flowers are thinning. Fill your storage cells before winter.','warn');
     }
@@ -32,6 +34,7 @@ function tick(){
     G.hives.slice().forEach(h=>{G.ci=G.hives.indexOf(h);_ctx=G.hives.length>1?h.name:null;if(instinctOn())planJobs();hiveDay();});
     _ctx=null;
     if(G.kp)keeperDay();
+    tripsDay();
 
     // hives that died
     G.hives.filter(h=>h.dead).forEach(h=>{
@@ -160,18 +163,16 @@ function hiveDay(){
     const cells=Object.keys(G.comb).length;
     if(G.bees>=120&&G.bees>cells*0.6&&(G.season==='Spring'||G.season==='Summer')){
         G.swarm=Math.min(100,G.swarm+{conserve:.8,normal:2,overdrive:3.5}[effMode()]);
-        if(G.swarm>=80)warnOnce('swarm',canSplit().ok?'The colony grows restless — split off a new hive (Colony → Queen) or raise a swarm cell.':'The colony grows restless — swarm pressure is high. Raise a swarm cell or build more comb.',10);
+        if(G.swarm>=80)warnOnce('swarm',canSplit().ok?'The colony grows restless. Split the hive or raise a queen cell.':'The colony grows restless. Raise a queen cell before it swarms.',10);
     }else G.swarm=Math.max(0,G.swarm-1);
     if(G.swarm>=100){
         const lost=Math.floor(G.bees*.4);G.bees-=lost;G.swarm=0;
-        toast(`The colony swarmed — the old queen left with ${lost} bees. A new queen takes over.`,'warn');hap([100,50,100]);
+        const pc=_ctx;_ctx=null;toast(`${H().name} swarmed. ${lost} bees left with the old queen.`,'warn');_ctx=pc;hap([100,50,100]);
+        if(window._S)window._S.swarmFly(H().q,H().r);
     }
 
     if(G.kp)superFlow();
     rebalance();
-
-    // Scouts
-    G.scouts=G.scouts.filter(s=>{if(--s.days<=0){revealTile(s.k);return false;}return true;});
 
     // Pollinators restore dead zones
     const bonus=G._lvl>=3?1.2:1;
@@ -179,8 +180,9 @@ function hiveDay(){
         const t=G.tiles[k];if(!t||t.type!=='DEAD_ZONE'){delete G.pa[k];return;}
         G.restore[k]=Math.min(100,(G.restore[k]||0)+n*PA_RATE*bonus);
         if(G.restore[k]>=100){
-            t.type='WILDFLOWER';t.stage=1;delete G.restore[k];delete G.pa[k];G._tilesRestored++;
-            toast(`A dead zone stirs back to life — ${n} pollinators come home`,'green');hap([40,20,40,20,40]);Snd.revive();
+            const all=paTotal(k);
+            t.type='WILDFLOWER';t.stage=1;delete G.restore[k];G.hives.forEach(h=>delete h.pa[k]);G._tilesRestored++;
+            toast(`A dead zone stirs back to life — ${all} pollinators come home`,'green');hap([40,20,40,20,40]);Snd.revive();
         }
     });
 
@@ -299,24 +301,140 @@ function diseasedFlower(){
     });
 }
 
-// ── SCOUTING ──────────────────────────────────────────────────────────────────
-function scoutable(k){const f=G.fog[k];return f&&f.level===1&&nbrs(f.q,f.r).some(([q,r])=>G.tiles[hkey(q,r)]);}
-function sendScout(k){
-    if(!scoutable(k)){toast('Scouts can only reach dark tiles touching your land','warn');return;}
-    if(G.scouts.length>=3){toast('Three scout teams are already out','warn');return;}
-    if(G.scouts.find(s=>s.k===k)){toast('Scouts are already heading there','warn');return;}
-    if(instinctOn())freeForagers(SCOUT_BEES);
-    if(idle()<SCOUT_BEES){toast(`Need ${SCOUT_BEES} idle bees to scout`,'warn');return;}
-    G.scouts.push({k,days:SCOUT_DAYS,n:SCOUT_BEES});
-    toast(`Scouts are out — back in ${SCOUT_DAYS} days`,'green');
+// ── SCOUTING (area trips, drawn from every hive) ──────────────────────────────
+// A trip maps a connected patch of fog. One hex is 6 bee-days of work, and the hexes reveal one by
+// one, nearest to home first. Scouts come from the hive closest to the patch first, 6 per hive at most.
+const HEX_WORK=6,SCOUT_CAP=6,PATCH=[[5,'Small'],[10,'Medium'],[15,'Large']];
+function scoutable(k){const f=G.fog[k];return!!f&&nbrs(f.q,f.r).some(([q,r])=>G.tiles[hkey(q,r)]);}
+function tripOf(k){return G.trips.find(t=>t.hexes.includes(k));}
+function tripBees(t){let n=0;G.hives.forEach(h=>h.scouts.forEach(s=>{if(s.t===t.id)n+=s.n;}));return n;}
+function tripDays(t){const n=tripBees(t);return n?Math.ceil(Math.max(0,t.hexes.length*HEX_WORK-t.work)/n):0;}
+// up to n connected fog hexes around k (nearest k first) that no other trip has
+function patchAt(k,n){
+    if(!G.fog[k]||tripOf(k))return[];
+    const out=[k],seen=new Set(out);
+    for(let i=0;i<out.length&&out.length<n;i++){
+        const f=G.fog[out[i]];
+        for(const[q,r]of nbrs(f.q,f.r)){
+            const nk=hkey(q,r);if(seen.has(nk))continue;seen.add(nk);
+            if(G.fog[nk]&&!tripOf(nk)){out.push(nk);if(out.length>=n)break;}
+        }
+    }
+    return out;
 }
-function revealTile(k){
+function patchName(k){
+    const f=G.fog[k],p=h2p(f.q,f.r),a=Math.atan2(-p.y,p.x)*180/Math.PI;
+    return['East','Northeast','North','Northwest','West','Southwest','South','Southeast'][((Math.round(a/45)%8)+8)%8]+' patch';
+}
+// bees hive h could send right now
+function scoutRoom(h){
+    return withHive(h,()=>Math.max(0,Math.min(SCOUT_CAP-scoutTotal(),idle()+(instinctOn()?foragerTotal():0))));
+}
+function scoutRoomAll(){return G.hives.reduce((a,h)=>a+scoutRoom(h),0);}
+// pull n scouts for trip t, closest hive first (or back from the hives in `from`); returns how many went
+function pullScouts(t,n,from){
+    const f=G.fog[t.hexes[0]]||{q:0,r:0};
+    const hs=from||G.hives.slice().sort((a,b)=>hdist(a.q,a.r,f.q,f.r)-hdist(b.q,b.r,f.q,f.r));
+    let sent=0;
+    for(const h of hs){
+        const want=from?Math.min(t.want[h.id]||0,n-sent):n-sent;if(want<=0)continue;
+        const m=Math.min(want,scoutRoom(h));if(m<=0)continue;
+        withHive(h,()=>{if(instinctOn())freeForagers(m);G.scouts.push({t:t.id,n:m});});
+        if(!from)t.want[h.id]=m;
+        sent+=m;
+    }
+    return sent;
+}
+function sendTrip(k,size,n){
+    if(G.season==='Winter'){toast('Scouts stay home in winter. Send them in spring.','warn');return false;}
+    const hexes=patchAt(k,size);
+    if(!hexes.length){toast('Scouts are already mapping this land','warn');return false;}
+    if(!hexes.some(scoutable)){toast('Too deep. Pick a dark tile closer to your land.','warn');return false;}
+    const t={id:++G._tid,name:patchName(k),hexes,total:hexes.length,done:0,work:0,want:{},found:{}};
+    const sent=pullScouts(t,n);
+    if(!sent){toast('No bees free to scout','warn');return false;}
+    G.trips.push(t);
+    toast(`${sent} scouts are out to the ${t.name.toLowerCase()} (${t.total} hexes, about ${tripDays(t)} days)`,'green');
+    return true;
+}
+function endTrip(t,msg){
+    G.hives.forEach(h=>{h.scouts=h.scouts.filter(s=>s.t!==t.id);});
+    G.trips.splice(G.trips.indexOf(t),1);
+    if(msg)toast(msg,'green');
+}
+// the hex of trip t to map next: touching known land, nearest a hive
+function nextHex(t){
+    const near=k=>{const f=G.fog[k];return Math.min(...G.hives.map(h=>hdist(f.q,f.r,h.q,h.r)));};
+    const open=t.hexes.filter(scoutable);
+    return(open.length?open:t.hexes).sort((a,b)=>near(a)-near(b))[0];
+}
+function tripsDay(){
+    if(G.season==='Winter')return;
+    G.trips.slice().forEach(t=>{
+        t.hexes=t.hexes.filter(k=>G.fog[k]);
+        const n=tripBees(t);
+        if(!n){endTrip(t);return;}
+        t.work+=n;
+        while(t.work>=HEX_WORK&&t.hexes.length){
+            const k=nextHex(t);t.hexes.splice(t.hexes.indexOf(k),1);
+            const ty=revealTile(k,true);t.found[ty]=(t.found[ty]||0)+1;t.done++;t.work-=HEX_WORK;
+        }
+        if(!t.hexes.length){
+            const f=Object.entries(t.found).sort((a,b)=>b[1]-a[1]).map(([ty,c])=>`${c} ${TD[ty].label.toLowerCase()}`).join(', ');
+            endTrip(t,`${t.name} mapped: ${f}. The scouts head home.`);
+        }
+    });
+}
+// first day of winter: scouts and pollinators come home; first day of spring: they head back out
+function winterHome(){
+    let n=0;
+    G.hives.forEach(h=>{
+        n+=h.scouts.reduce((a,s)=>a+s.n,0)+sum(h.pa);
+        h.scouts=[];h._paW=h.pa;h.pa={};
+    });
+    if(n)toast(`${n} scouts and pollinators come home for the winter`,'info');
+}
+function springOut(){
+    let n=0;
+    G.trips.forEach(t=>{n+=pullScouts(t,Infinity,G.hives.filter(h=>t.want[h.id]));});
+    G.hives.forEach(h=>{
+        const w=h._paW||{};h._paW=null;
+        Object.entries(w).forEach(([k,m])=>{
+            const t=G.tiles[k];if(!t||t.type!=='DEAD_ZONE')return;
+            withHive(h,()=>{if(instinctOn())freeForagers(m);const c=Math.min(m,idle());if(c>0){G.pa[k]=(G.pa[k]||0)+c;n+=c;}});
+        });
+    });
+    if(n)toast(`${n} scouts and pollinators head back out`,'green');
+}
+function revealTile(k,quiet){
     const f=G.fog[k];if(!f)return;
     const type=pick({WILDFLOWER:3,FOREST:2,CLOVER:2,SUNFLOWER:1,DEAD_ZONE:hdist(f.q,f.r)>=5?8:6,WATER:1});
     G.tiles[k]={q:f.q,r:f.r,type,stage:type==='DEAD_ZONE'?0:1};delete G.fog[k];
     nbrs(f.q,f.r).forEach(([q,r])=>{const nk=hkey(q,r);if(G.tiles[nk])return;if(!G.fog[nk])G.fog[nk]={q,r,level:1};else G.fog[nk].level=1;});
     G._ach._scouted=(G._ach._scouted||0)+1;
-    toast(`Scouts found a ${TD[type].label}`,'green');
+    if(!quiet)toast(`Scouts found a ${TD[type].label}`,'green');
+    return type;
+}
+
+// ── POLLINATORS (one pool across the colony) ──────────────────────────────────
+function paTotal(k){return G.hives.reduce((a,h)=>a+(h.pa[k]||0),0);}
+function paHives(k){const t=G.tiles[k];return G.hives.filter(h=>hdist(t.q,t.r,h.q,h.r)<=h.frad).sort((a,b)=>hdist(t.q,t.r,a.q,a.r)-hdist(t.q,t.r,b.q,b.r));}
+function paAdd(k,n){
+    const hs=paHives(k);
+    if(!hs.length){toast('Out of reach of every hive. Reach grows with hive size.','warn');return;}
+    let left=n;
+    for(const h of hs){
+        if(left<=0)break;
+        withHive(h,()=>{if(instinctOn())freeForagers(left);const m=Math.min(left,idle());if(m>0){G.pa[k]=(G.pa[k]||0)+m;left-=m;}});
+    }
+    if(left===n)toast('No idle bees in the hives that can reach it','warn');
+}
+function paRemove(k,n){
+    const hs=paHives(k).reverse().concat(G.hives.filter(h=>h.pa[k]));   // farthest first
+    for(const h of hs){
+        if(n<=0)break;const m=Math.min(n,h.pa[k]||0);if(!m)continue;
+        h.pa[k]-=m;if(!h.pa[k])delete h.pa[k];n-=m;
+    }
 }
 
 // ── COLLAPSE (the last hive has died) ─────────────────────────────────────────

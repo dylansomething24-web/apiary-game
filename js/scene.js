@@ -173,7 +173,29 @@ class GameScene extends Phaser.Scene{
         const{x,y}=sz===SZ?h2p(q,r):hv2p(q,r);
         this.hlG.clear();this.hlG.lineStyle(3,0xffd060,.95);this.hex(this.hlG,x,y,sz);this.hlG.strokePath();
     }
-    clearHl(){this.hlG.clear();}
+    clearHl(){this.hlG.clear();this._pk=null;}
+    hlPatch(keys,k0){
+        const g=this.hlG;g.clear();
+        let cx=0,cy=0,n=0;
+        keys.forEach(k=>{const f=G.fog[k];if(!f)return;const{x,y}=h2p(f.q,f.r);cx+=x;cy+=y;n++;g.fillStyle(0xffd060,.12);this.hex(g,x,y,SZ);g.fillPath();g.lineStyle(k===k0?3:1.5,0xffd060,k===k0?.95:.6);this.hex(g,x,y,SZ);g.strokePath();});
+        // bring a newly picked patch into the strip of map above the panel
+        const sig=k0+':'+n;
+        if(n&&sig!==this._pk){this.cam.pan(cx/n,cy/n+this.cam.height*.22/this.cam.zoom,400);}
+        this._pk=sig;
+    }
+    // a swarm lifts off the hive and drifts off the edge of the map
+    swarmFly(q,r){
+        if(G.view!=='map')return;
+        const p=h2p(q,r);let R=1;Object.values(G.tiles).forEach(o=>R=Math.max(R,hdist(o.q,o.r)));
+        const ang=Math.random()*Math.PI*2,far=SZ*S3*(R+4);
+        this.cam.pan(p.x,p.y,500);
+        for(let i=0;i<26;i++){
+            const b=this.add.text(p.x+(Math.random()-.5)*18,p.y+(Math.random()-.5)*12,'🐝',{font:'15px serif'}).setOrigin(.5).setDepth(9);
+            const tx=p.x+Math.cos(ang)*far+(Math.random()-.5)*80,ty=p.y+Math.sin(ang)*far+(Math.random()-.5)*80;
+            this.tweens.add({targets:b,y:b.y-26-Math.random()*22,x:b.x+(Math.random()-.5)*30,duration:1000,ease:'Sine.easeOut',delay:i*70,
+                onComplete:()=>this.tweens.add({targets:b,x:tx,y:ty,duration:4500+Math.random()*1800,ease:'Sine.easeIn',onComplete:()=>b.destroy()})});
+        }
+    }
     hex(g,cx,cy,sz){const p=cors(cx,cy,sz-1.5);g.beginPath();g.moveTo(p[0],p[1]);for(let i=2;i<12;i+=2)g.lineTo(p[i],p[i+1]);g.closePath();}
 
     // ── MAP ──────────────────────────────────────────────────────────────────
@@ -181,7 +203,7 @@ class GameScene extends Phaser.Scene{
         const g=this.mapG;g.clear();
         Object.entries(G.fog).forEach(([k,{q,r,level}])=>{
             const{x,y}=h2p(q,r);
-            const sc=G.scouts.find(s=>s.k===k);
+            const sc=tripOf(k);
             g.fillStyle(level===1?0x161f17:0x0c120d,1);g.lineStyle(1,level===1?0x2a3a2c:0x141c15,1);
             this.hex(g,x,y,SZ);g.fillPath();g.strokePath();
             if(sc){g.fillStyle(0xe09a18,.25);this.hex(g,x,y,SZ);g.fillPath();}
@@ -217,8 +239,9 @@ class GameScene extends Phaser.Scene{
         this.labels.forEach(l=>l.destroy());this.labels=[];
         const mk=(x,y,txt,col)=>{const l=this.add.text(x,y,txt,{fontFamily:'Courier New',fontSize:'13px',fontStyle:'bold',color:col,stroke:'#050805',strokeThickness:4}).setOrigin(.5).setDepth(3);l.setVisible(G.view!=='hive');this.labels.push(l);};
         Object.entries(G.fa).forEach(([k,n])=>{const t=G.tiles[k];if(!t)return;const{x,y}=h2p(t.q,t.r);mk(x,y+SZ*.55,'🐝'+n,'#ffc040');});
-        Object.entries(G.pa).forEach(([k,n])=>{const t=G.tiles[k];if(!t)return;const{x,y}=h2p(t.q,t.r);mk(x,y+SZ*.55,'🌱'+n,'#70e070');});
-        G.scouts.forEach(s=>{const f=G.fog[s.k];if(!f)return;const{x,y}=h2p(f.q,f.r);mk(x,y,s.days+'d','#e0a030');});
+        const pk=new Set();G.hives.forEach(h=>Object.keys(h.pa).forEach(k=>pk.add(k)));
+        pk.forEach(k=>{const t=G.tiles[k];if(!t)return;const{x,y}=h2p(t.q,t.r);mk(x,y+SZ*.55,'🌱'+paTotal(k),'#70e070');});
+        G.trips.forEach(t=>{const k=t.hexes.length&&nextHex(t),f=k&&G.fog[k];if(!f)return;const{x,y}=h2p(f.q,f.r);mk(x,y,t.done+'/'+t.total,'#e0a030');});
     }
 
     // ── HIVE INTERIOR ─────────────────────────────────────────────────────────
@@ -275,7 +298,7 @@ class GameScene extends Phaser.Scene{
     update(time,delta){
         if(!ovOpen()&&!G.paused){
             G._dt+=delta*G.speed;
-            if(G._dt>=3000){G._dt=0;tick();}
+            if(G._dt>=6000){G._dt=0;tick();}   // one day per 6 s at 1x
         }
         this.bees.update(time);this.parts.update(delta);
     }
