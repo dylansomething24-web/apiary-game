@@ -54,6 +54,31 @@ button:disabled{opacity:.35;}
 .seg.four{grid-template-columns:repeat(4,1fr);}
 .seg button.off{opacity:.45;}
 
+/* Levels and progress */
+#h-stage{cursor:pointer;color:var(--amber2);}
+.ov-sheet{background:var(--bg);border:1px solid var(--line2);border-radius:14px;max-width:440px;width:100%;max-height:100%;display:flex;flex-direction:column;overflow:hidden;}
+.ps-head{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid var(--line);flex:none;}
+.ps-head h2{font:italic 1.4rem var(--serif);color:var(--amber);}
+#pbody{overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px;display:flex;flex-direction:column;gap:12px;}
+.pl-n{font:11px var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--muted);}
+.card h3.pl-name{font-size:1.5rem;margin:2px 0 4px;}
+.lv-h{font:11px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--amber2);margin:10px 0 4px;}
+.lvrow{display:grid;grid-template-columns:30px 1fr;gap:10px;padding:10px 0;border-top:1px solid var(--line);}
+.card h3+.lvrow{border-top:none;}
+.lvrow .rdesc{margin-top:3px;}
+.lvbadge{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font:700 .85rem var(--mono);border:1px solid var(--line2);color:var(--muted);}
+.lvrow.done .lvbadge{background:#1e3a24;border-color:var(--good);color:var(--good);}
+.lvrow.cur .lvbadge{background:#3a2c0e;border-color:var(--amber);color:var(--amber);}
+.lvrow.cur .rname{color:var(--amber);}
+.lvrow.lock{opacity:.5;}
+.lvi{color:var(--amber2)!important;}
+.lvcard ul{margin:0 0 14px 18px;color:var(--text);font-size:.95rem;line-height:1.6;}
+.lv-inst{background:#1a2410;border:1px solid #5a6a2a;border-radius:10px;padding:10px 12px;margin-bottom:6px;}
+.lv-inst b{display:block;color:var(--amber);font-weight:600;margin-bottom:4px;}
+.lv-inst em{color:var(--muted);font-size:.85rem;}
+.lv-inst span{display:block;font-size:.88rem;color:var(--muted);line-height:1.45;}
+.lv-note{color:var(--amber2)!important;font-style:italic;}
+
 /* Main area */
 #main{flex:1;position:relative;overflow:hidden;}
 #game{position:absolute;inset:0;}
@@ -165,7 +190,7 @@ button:disabled{opacity:.35;}
         </div>
         <div class="hrow2">
             <span id="h-date">Spring · Day 1 · Year 1</span>
-            <span id="h-stage">New Swarm</span>
+            <span id="h-stage" data-a="progress">Lv 1 · New Swarm ›</span>
             <button id="pause-btn" class="hbtn" data-a="pause">❚❚</button>
             <button id="speed-btn" class="hbtn" data-a="speed">1×</button>
         </div>
@@ -231,12 +256,29 @@ button:disabled{opacity:.35;}
     </div>
 </div>
 
+<div class="ov" id="ov-l">
+    <div class="ov-card lvcard">
+        <div class="pl-n" id="lv-n"></div>
+        <h2 id="lv-name"></h2>
+        <p id="lv-story"></p>
+        <div id="lv-list"></div>
+        <button class="ov-btn" data-a="lvlok">Continue</button>
+    </div>
+</div>
+
+<div class="ov" id="ov-p">
+    <div class="ov-sheet">
+        <div class="ps-head"><h2>Progress</h2><button class="hbtn" data-a="progclose">Close</button></div>
+        <div id="pbody"></div>
+    </div>
+</div>
+
 <div class="ov" id="ov-g">
     <div class="ov-card">
         <h2>The Colony Has Fallen</h2>
         <p id="gm-year"></p>
         <p id="gm-name" style="color:var(--amber2);font-style:italic"></p>
-        <div class="gm-row">Stage reached<b id="gm-stage"></b></div>
+        <div class="gm-row">Level reached<b id="gm-stage"></b></div>
         <div class="gm-row">Peak population<b id="gm-peak"></b></div>
         <div class="gm-row">Honey made<b id="gm-honey"></b></div>
         <div class="gm-row">Winters survived<b id="gm-winters"></b></div>

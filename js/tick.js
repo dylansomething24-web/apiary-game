@@ -50,7 +50,7 @@ function tick(){
         if(!(G.year===1&&G.day<20)&&Math.random()<.65){const h=G.hives[~~(Math.random()*G.hives.length)];withHive(h,threat);}
     }
 
-    const st=getStage();if(st>G._stagePrev){G._stagePrev=st;onStageAdvance(st);}
+    checkLevel();checkLand();
     checkMS();Snd.setVol();save();
     if(window._S){window._S.refresh();if(H()._hIn>0.2&&G.view==='map')window._S.burstForage();}
     renderAll(true);
@@ -166,7 +166,7 @@ function hiveDay(){
     G.scouts=G.scouts.filter(s=>{if(--s.days<=0){revealTile(s.k);return false;}return true;});
 
     // Pollinators restore dead zones
-    const bonus=getStage()>=3?1.2:1;
+    const bonus=G._lvl>=3?1.2:1;
     Object.entries(G.pa).forEach(([k,n])=>{
         const t=G.tiles[k];if(!t||t.type!=='DEAD_ZONE'){delete G.pa[k];return;}
         G.restore[k]=Math.min(100,(G.restore[k]||0)+n*PA_RATE*bonus);
@@ -252,7 +252,7 @@ function wasp(){
 }
 function varroa(){
     Snd.danger();hap([80,40,80,40,80]);
-    const res=getStage()>=5?.75:1;
+    const res=landRank()>=3?.75:1;
     const brood=Object.values(G.comb).filter(c=>c.t==='b'&&c.a>=3);
     showChoice({icon:'🕷',title:'Varroa Mites',
         body:'Mites are spreading through the capped brood.',
@@ -314,15 +314,16 @@ function revealTile(k){
 function collapse(){
     const set=(id,v)=>document.getElementById(id).textContent=v;
     set('gm-year',`Year ${G.year}, ${G.season}`);set('gm-peak',G._peakB);set('gm-honey',G._totH.toFixed(0)+' lb');
-    set('gm-winters',G._wintersS);set('gm-tiles',G._tilesRestored);set('gm-stage',STAGE_NAMES[getStage()]);
+    set('gm-winters',G._wintersS);set('gm-tiles',G._tilesRestored);set('gm-stage',`Level ${G._lvl}, ${LEVELS[G._lvl].name}`);
     set('gm-name',G._colonyName?`“${G._colonyName}”`:'');
     localStorage.removeItem(SK);ovShow('ov-g');
 }
 
 // ── QUEEN ─────────────────────────────────────────────────────────────────────
 function setQueenMode(m){
-    if(getStage()<2){toast('Laying modes unlock after your first winter','warn');return;}
-    if(m==='auto'&&G.hives.length<2){toast('Auto laying unlocks when you found a second hive','warn');return;}
+    if(G._lvl>=4){toast('Your queens follow the seasons on their own now','info');return;}
+    if(G._lvl<2){toast('Laying modes open at Level 2, after your first winter','warn');return;}
+    if(m==='auto'){toast('The Auto queen arrives at Level 4, with your second hive','warn');return;}
     G.qMode=m;
     toast({auto:'The queen follows the seasons — hard in spring, steady in summer, light in fall, resting in winter. She keeps only the brood room she needs.',conserve:'She lays with restraint — 2 eggs a day.',normal:'Her natural pace — 4 eggs a day.',overdrive:'She lays relentlessly — 7 eggs a day.'}[m],'green');
 }
@@ -334,6 +335,7 @@ function prepSwarm(){
 
 // ── SPLITTING INTO A NEW HIVE ─────────────────────────────────────────────────
 function canSplit(){
+    if(G._lvl<3)return{ok:false,reason:'Splitting opens at Level 3, Thriving Colony'};
     if(G.hives.length>=MAX_HIVES)return{ok:false,reason:`The land can hold ${MAX_HIVES} hives at most`};
     if(G.frad<SPLIT_REACH)return{ok:false,reason:`Needs a forage range of ${SPLIT_REACH} tiles (yours is ${G.frad})`};
     if(G.season!=='Spring'&&G.season!=='Summer')return{ok:false,reason:'Colonies only swarm in spring and summer'};
@@ -365,7 +367,7 @@ function doSplit(k){
     const nh=makeHive(t.q,t.r,`Hive ${G.hives.length+1}`,id);
     nh.bees=plan.n;nh.honey=plan.honey;nh.nectar=plan.nectar;
     nh.nurses=Math.max(2,Math.round(plan.n*.12));nh.processors=Math.max(1,Math.round(plan.n*.08));nh.builders=Math.max(1,Math.round(plan.n*.05));
-    nh.qMode='auto';nh.frad=plan.n>=100?2:1;
+    nh.qMode=G._lvl>=4?'auto':parent.qMode;nh.frad=plan.n>=100?2:1;
     // the old hive
     parent.bees-=plan.n;parent.honey-=plan.honey;parent.nectar-=plan.nectar;parent.swarm=0;
     withHive(parent,rebalance);
@@ -373,9 +375,10 @@ function doSplit(k){
     t.type='HIVE_BOX';t.stage=3;delete G.restore[k];
     G.hives.forEach(h=>{delete h.fa[k];delete h.pa[k];});
     G.hives.push(nh);
+    checkLevel();
     G._ach.sp=true;
     withHive(nh,()=>ACT.autoforage());   // give the new hive a working start
-    toast(`A new hive is founded with ${plan.n} bees. Its queen can lay on her own (Auto).`,'mile');hap([60,30,60,30,100]);
+    toast(`A new hive is founded with ${plan.n} bees.${nh.qMode==='auto'?' Its queen lays on her own (Auto).':''}`,'mile');hap([60,30,60,30,100]);
     G.placing=false;G.ci=G.hives.indexOf(nh);
     closePanel();
     return true;

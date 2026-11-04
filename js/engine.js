@@ -4,7 +4,6 @@ const SEASONS=['Spring','Summer','Fall','Winter'],SLEN=[25,35,25,15],YEAR=100;
 const SCOL={Spring:'#5fd07a',Summer:'#f0c838',Fall:'#e07a30',Winter:'#8ab8e8'};
 const STG=['Barren','Sparse','Recovering','Thriving'];
 const STAGE_MULT=[0.25,0.6,1,1.3];
-const STAGE_NAMES=['','New Swarm','Wintered Colony','Thriving Colony','Proven Colony','Legacy Colony'];
 const LAY={conserve:2,normal:4,overdrive:7};      // eggs per day
 const DEEP_CAPS=[1.5,2,2.5,3];   // lb one storage cell holds, by comb level
 const DEEP_COST=[0.15,0.25,0.35]; // lb honey (wax) to deepen one cell to the next level
@@ -111,7 +110,7 @@ function newState(){
         hmode:'inspect',
         season:'Spring',day:1,year:1,speed:1,
         _nt:30,_totH:0,_peakB:15,_ach:{},
-        _wintersS:0,_tilesRestored:0,_stagePrev:1,_colonyName:'',
+        _wintersS:0,_tilesRestored:0,_colonyName:'',_lvl:1,_maxHives:1,_landPrev:0,
         view:'map',sel:null,_dt:0,cams:{},
     });
 }
@@ -129,6 +128,7 @@ function load(){
         if(!(G.ci>=0&&G.ci<G.hives.length))G.ci=0;
         G._hid=Math.max(G._hid||1,...G.hives.map(h=>h.id));
         G.view='map';G.sel=null;G._dt=0;G.cams={};G.placing=false;
+        if(o._lvl==null){checkLevel(true);G._landPrev=landRank();}   // save from before levels
         return true;
     }catch(e){return false;}
 }
@@ -266,26 +266,72 @@ function rebalance(){
     }
 }
 
-// ── HIVE STAGE SYSTEM ─────────────────────────────────────────────────────────
+// ── COLONY LEVELS ─────────────────────────────────────────────────────────────
+// Levels only go up. Each one opens new things to do, and some give the hives a new instinct
+// (a job the bees now handle on their own, for good). Levels past 5 get added as the game grows.
+const LEVELS=[null,
+    {name:'New Swarm',need:()=>[],
+     opens:['Foraging and worker jobs','Scouting the fog','Painting brood and storage comb','Deepening the comb']},
+    {name:'Wintered Colony',need:()=>[['Winters survived',G._wintersS,1]],
+     opens:['Queen laying modes','Pollinators, to heal dead zones','A name for your colony'],
+     story:'The colony has known cold and kept its warmth.'},
+    {name:'Thriving Colony',need:()=>[['Most bees at once',G._peakB,100],['Dead zones restored',G._tilesRestored,1]],
+     opens:['Pollinators work 20% faster','Splitting a hive (also needs a forage range of 3)'],
+     story:'Where the bees have worked, the land has changed.'},
+    {name:'Two Hives',need:()=>[['Hives founded',G._maxHives,2]],
+     opens:['Hive chips and alerts across your hives'],
+     inst:'Auto queen',instD:'Every queen follows the seasons on her own: hard in spring, steady in summer, light in fall, resting in winter. She keeps only the brood room she can fill.',
+     story:'The colony is no longer one hive. It is spreading.'},
+    {name:'The Colony',need:()=>[['Hives founded',G._maxHives,3]],
+     opens:['A new Colony page (next update)'],
+     inst:'Jobs and honey',soon:true,instD:'The bees fill their own jobs, forage the best fields, store enough for winter, then build and deepen comb with what is left.',
+     story:'Three hives, one colony. The bees begin to look after themselves.'},
+];
+const MAX_LEVEL=LEVELS.length-1;
+function levelMet(n){return LEVELS[n].need().every(([,v,t])=>v>=t);}
+let _lvlQ=[];
+// silent: work out the level for an old save without the level-up cards
+function checkLevel(silent){
+    G._maxHives=Math.max(G._maxHives||1,G.hives.length);
+    while(G._lvl<MAX_LEVEL&&levelMet(G._lvl+1)){
+        G._lvl++;onLevelUp(G._lvl,silent);
+    }
+}
+function onLevelUp(n,silent){
+    if(n===2&&!G._colonyName)G._colonyName=genColonyName();
+    if(n>=4)G.hives.forEach(h=>h.qMode='auto');   // the Auto queen instinct is permanent
+    if(silent)return;
+    _lvlQ.push(n);hap([40,20,40,20,40]);
+    if(!document.querySelector('#ov-l.show'))showNextLevel();
+}
+function showNextLevel(){
+    const n=_lvlQ.shift();if(!n)return;
+    const L=LEVELS[n];
+    document.getElementById('lv-n').textContent=`Level ${n}`;
+    document.getElementById('lv-name').textContent=L.name;
+    document.getElementById('lv-story').textContent=L.story||'';
+    document.getElementById('lv-list').innerHTML=
+        (L.inst?`<div class="lv-inst"><b>New hive instinct: ${L.inst}</b>${L.soon?' <em>(arrives next update)</em>':''}<span>${L.instD}</span></div>`:'')+
+        `<div class="lv-h">Now open</div><ul>${L.opens.map(o=>`<li>${o}</li>`).join('')}</ul>`+
+        (n===2&&G._colonyName?`<p class="lv-note">Your colony is now known as ${G._colonyName}.</p>`:'');
+    Snd.mile();ovShow('ov-l');
+}
+function instincts(){return LEVELS.slice(1,G._lvl+1).filter(L=>L.inst);}
+
+// ── LAND HEALING (its own track, beside the levels) ──────────────────────────
 function restorationPct(){
     const c=Object.values(G.tiles).filter(t=>t.type!=='HIVE_BOX'&&t.type!=='WATER'&&t.type!=='STRUCTURE');
     return c.length?c.filter(t=>t.type!=='DEAD_ZONE'&&t.stage>=2).length/c.length*100:0;
 }
-function getStage(){
-    const rp=restorationPct();
-    if(G._wintersS>=3&&G._peakB>=300&&rp>=60)return 5;
-    if(G._wintersS>=2&&G._peakB>=200&&rp>=40)return 4;
-    if(G._peakB>=100&&G._tilesRestored>=1&&G._wintersS>=1)return 3;
-    if(G._wintersS>=1)return 2;
-    return 1;
-}
-function stageNextDesc(){
-    const s=getStage(),rp=~~restorationPct();
-    if(s===1)return'Survive your first winter';
-    if(s===2)return`Reach 100 bees (${G._peakB}) and restore a dead zone (${G._tilesRestored}/1)`;
-    if(s===3)return`200 bees (${G._peakB}) · 2 winters (${G._wintersS}) · 40% land healed (${rp}%)`;
-    if(s===4)return`300 bees (${G._peakB}) · 3 winters (${G._wintersS}) · 60% land healed (${rp}%)`;
-    return'Legacy reached';
+const LAND_AT=[0,20,40,60];   // % healed for Barren, Sparse, Recovering, Thriving
+function landRank(){const p=restorationPct();let r=0;LAND_AT.forEach((v,i)=>{if(p>=v)r=i;});return r;}
+const LAND_MSG={1:'Green is creeping back into the land.',2:'The land is recovering. Fields that were dust are blooming again.',3:'A landscape that looks different than it did when they arrived. Varroa now does 25% less harm.'};
+function checkLand(){
+    const r=landRank();
+    if(r>(G._landPrev||0)){
+        G._landPrev=r;toast(LAND_MSG[r],'mile');
+        if(r===3)setTimeout(()=>toast('Someone has been watching. A researcher has noticed your territory.','mile'),3500);
+    }
 }
 function genColonyName(){
     const counts={};
@@ -295,19 +341,6 @@ function genColonyName(){
     const dir=['North','South','East','West'][~~(Math.random()*4)];
     return`The ${dir} ${top?(nm[top[0]]||'Wild'):'Wild'} Colony`;
 }
-function onStageAdvance(stage){
-    const msgs={
-        2:'The colony has known cold and kept its warmth. Queen laying modes and pollinators are now yours to command.',
-        3:'Where the bees have worked, the land has changed. Pollinators now restore 20% faster.',
-        4:'Two winters. A hive that has bent and held.',
-        5:'Three winters. A landscape that looks different than it did when they arrived.',
-    };
-    if(msgs[stage])setTimeout(()=>toast(msgs[stage],'mile'),600);
-    hap([40,20,40,20,40]);
-    if(stage===2&&!G._colonyName){G._colonyName=genColonyName();setTimeout(()=>toast(`Your colony is now known as ${G._colonyName}`,'green'),2000);}
-    if(stage===5)setTimeout(()=>toast('Someone has been watching. A researcher has noticed your territory.','mile'),3500);
-}
-
 // ── MILESTONES ────────────────────────────────────────────────────────────────
 const MS=[
     {id:'b30', chk:()=>totalBees()>=30, msg:'Colony growing — 30 bees'},

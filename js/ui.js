@@ -54,7 +54,7 @@ function hud(e,fromTick){
     const net=$('h-net');net.textContent=sgn(e.net)+'/day';net.className='hv '+(e.net>=0?'good':'bad');
     $('h-date').textContent=`${G.season} · Day ${dayInSeason(G.day)} · Year ${G.year}`;
     $('h-date').style.color=SCOL[G.season];
-    $('h-stage').textContent=STAGE_NAMES[getStage()];
+    $('h-stage').textContent=`Lv ${G._lvl} · ${LEVELS[G._lvl].name} ›`;
     $('speed-btn').textContent=(G.speed===0.5?'½':G.speed)+'×';
     const pb=$('pause-btn');pb.textContent=G.paused?'▶ Play':'❚❚';pb.classList.toggle('on',!!G.paused);    // the most urgent problem in any hive
     const rank={bad:0,warn:1,info:2};let best=null;const first=[];
@@ -104,7 +104,7 @@ const ACT={
         toast(`${sent} bees sent to ${used} field${used>1?'s':''}${n?` (${n} still idle — the fields are full)`:''}`,'green');
     },
     pa(d){
-        if(getStage()<2){toast('Pollinators unlock after your first winter','warn');return;}
+        if(G._lvl<2){toast('Pollinators open at Level 2, after your first winter','warn');return;}
         const k=d.k,delta=+d.d,t=G.tiles[k];
         if(delta>0){
             if(!inRange(t)){toast('Too far — the colony needs more bees to reach it','warn');return;}
@@ -132,6 +132,9 @@ const ACT={
     begin(){beginGame();},
     choice(d){ovHide('ov-c');const f=_choice&&_choice[d.c];_choice=null;if(f)f();},
     prepswarm(){prepSwarm();},
+    progress(){renderProgress();ovShow('ov-p');$('pbody').scrollTop=0;return'norender';},
+    progclose(){ovHide('ov-p');},
+    lvlok(){ovHide('ov-l');showNextLevel();},
     gohive(d){
         const i=+d.i;if(!G.hives[i]||i===G.ci)return;
         G.ci=i;closePanel();G.cams.hive=null;if(window._S)window._S.focusHive();
@@ -207,7 +210,7 @@ function roleRow(key,label,desc,status){
 const CTABS=[['hive','Hive'],['workers','Workers'],['land','Land'],['queen','Queen']];
 let _lastCtab='';
 function renderColony(e){
-    const bs=e.bs,stage=getStage(),gn=guardsNeeded();
+    const bs=e.bs,stage=G._lvl,gn=guardsNeeded();
     const fill=(G.honey+G.nectar)/Math.max(1,e.cap)*100;
     if(!CTABS.some(t=>t[0]===G.ctab))G.ctab='hive';
     const tab=G.ctab;
@@ -255,7 +258,7 @@ function renderColony(e){
     else if(!dz.length)h+=`<p class="hint">No dead zones on your land.</p>`;
     else h+=dz.map(k=>{const t=G.tiles[k],ok=inRange(t),p=G.restore[k]||0,n=G.pa[k]||0;
         return`<div class="frow"><div class="fi"><div class="rname">Dead Zone · ${hiveDist(t)} out</div>${bar(p,'greenbar')}
-        <div class="rdesc">${ok?(n?`${~~p}% · about ${Math.ceil((100-p)/(n*PA_RATE*(getStage()>=3?1.2:1)))} days left`:`${~~p}% restored`):'Out of reach'}</div></div>
+        <div class="rdesc">${ok?(n?`${~~p}% · about ${Math.ceil((100-p)/(n*PA_RATE*(G._lvl>=3?1.2:1)))} days left`:`${~~p}% restored`):'Out of reach'}</div></div>
         <div class="fs">${ok?mini('pa',k).replace('</button><button','</button><b>'+n+'</b><button'):''}</div></div>`;}).join('');
     h+=`</section>`;
 
@@ -272,7 +275,7 @@ function renderColony(e){
     <div class="kv"><span>Laying</span><b>${e.layRate} eggs/day${G.qMode==='auto'?' (auto)':''}</b></div>
     <div class="kv"><span>Brood cells</span><b>${bs.total} (${bs.empty} empty)</b></div>
     <div class="brood-mix"><span>Eggs ${bs.eggs}</span><span>Larvae ${bs.larvae}</span><span>Capped ${bs.capped}</span>${bs.dead?`<span class="bad">Dead ${bs.dead}</span>`:''}</div>
-    <div class="seg four">${qb('auto','Auto')}${qb('conserve','Conserve')}${qb('normal','Normal')}${qb('overdrive','Overdrive')}</div>
+    ${stage>=4?'':`<div class="seg four">${qb('auto','Auto')}${qb('conserve','Conserve')}${qb('normal','Normal')}${qb('overdrive','Overdrive')}</div>`}
     ${G.qMode==='auto'?`<p class="hint">Auto follows the seasons: Overdrive in spring, Normal in summer, Conserve in fall, rest in winter. She is only given the brood room she can fill (${autoBroodTarget()} cells now), and every other cell is kept for honey. Brood stays in the middle.</p>`
       :stage<2?'<p class="hint">Laying modes unlock after the first winter. Tell her where to lay by painting brood cells in the Hive tab.</p>'
       :locked?'<p class="hint">Auto laying unlocks when you found a second hive. Until then, paint brood cells in the Hive tab to choose where she lays.</p>'
@@ -326,12 +329,8 @@ function renderColony(e){
 
     if(tab==='queen'){
     h+=`<section class="card"><h3>${G._colonyName||'Your Colony'}</h3>
-    <div class="kv"><span>Stage</span><b>${STAGE_NAMES[stage]}</b></div>
-    <p class="hint">Next: ${stageNextDesc()}</p>
-    <div class="kv"><span>Winters survived</span><b>${G._wintersS}</b></div>
-    <div class="kv"><span>Peak population</span><b>${G._peakB}</b></div>
-    <div class="kv"><span>Honey made</span><b>${G._totH.toFixed(0)} lb</b></div>
-    <div class="kv"><span>Dead zones restored</span><b>${G._tilesRestored}</b></div>
+    <div class="kv"><span>Level</span><b>${stage} · ${LEVELS[stage].name}</b></div>
+    ${btn('See progress and levels','progress','','wide')}
     ${btn('Start a new colony','newgame','','wide danger')}
     </section>`;
     h+=`<section class="card"><h3>Hives <span class="sub">${G.hives.length} / ${MAX_HIVES}</span></h3>
@@ -344,6 +343,45 @@ function renderColony(e){
     $('ctabs').innerHTML=CTABS.map(([v,l])=>btn(l,'ctab',`data-v="${v}"`,tab===v?'on':'')).join('');
     $('cbody').innerHTML=h;
     if(_lastCtab!==tab){$('cbody').scrollTop=0;_lastCtab=tab;}
+}
+
+// ── PROGRESS SCREEN ───────────────────────────────────────────────────────────
+function renderProgress(){
+    const L=LEVELS[G._lvl],nx=LEVELS[G._lvl+1];
+    const needRow=([l,v,t])=>`<div class="kv"><span>${l}</span><b class="${v>=t?'good':''}">${Math.min(v,t)} / ${t}</b></div>${bar(v/t*100,v>=t?'greenbar':'')}`;
+    let h=`<section class="card"><div class="pl-n">Level ${G._lvl}</div><h3 class="pl-name">${L.name}</h3>
+      ${G._colonyName?`<p class="hint">${G._colonyName}</p>`:''}
+      ${nx?`<div class="lv-h">Next: Level ${G._lvl+1}, ${nx.name}</div>${nx.need().map(needRow).join('')}`
+          :'<p class="hint">You have reached the top level for now. More levels will be added as the game grows.</p>'}
+    </section>`;
+    h+=`<section class="card"><h3>Levels</h3>${LEVELS.slice(1).map((v,i)=>{const n=i+1,st=n<G._lvl?'done':n===G._lvl?'cur':'lock';
+        return`<div class="lvrow ${st}"><div class="lvbadge">${st==='done'?'✓':n}</div><div>
+          <div class="rname">${v.name}</div>
+          ${n>1?`<div class="rdesc">Needs: ${v.need().map(([l,,t])=>`${l} ${t}`).join(' · ')}</div>`:'<div class="rdesc">Where every colony begins</div>'}
+          <div class="rdesc">Opens: ${v.opens.join(' · ')}</div>
+          ${v.inst?`<div class="rdesc lvi">Hive instinct: ${v.inst}${v.soon?' (next update)':''}</div>`:''}
+        </div></div>`;}).join('')}
+      <div class="lvrow lock"><div class="lvbadge">…</div><div><div class="rdesc">More levels come as the colony grows.</div></div></div>
+    </section>`;
+    const ins=instincts();
+    h+=`<section class="card"><h3>Hive instincts <span class="sub">jobs the bees now do on their own</span></h3>
+      ${ins.length?ins.map(v=>`<div class="row"><div class="rname">${v.inst}${v.soon?' <span class="sub">(arrives next update)</span>':''}</div><div class="rdesc">${v.instD}</div></div>`).join('')
+        :'<p class="hint">None yet. The first one, the Auto queen, arrives at Level 4.</p>'}
+    </section>`;
+    const p=restorationPct(),r=landRank();
+    h+=`<section class="card"><h3>Land healing <span class="sub">${STG[r]}</span></h3>
+      <div class="kv"><span>Land healed</span><b>${~~p}%</b></div>${bar(p,'greenbar')}
+      <p class="hint">${r<3?`Next: ${STG[r+1]} at ${LAND_AT[r+1]}% healed.`:'Thriving land: varroa does 25% less harm.'} Healed land counts flower tiles at Recovering or better. Dead zones count against it.</p>
+    </section>`;
+    h+=`<section class="card"><h3>Colony record</h3>
+      <div class="kv"><span>Year</span><b>${G.year}</b></div>
+      <div class="kv"><span>Winters survived</span><b>${G._wintersS}</b></div>
+      <div class="kv"><span>Most bees at once</span><b>${G._peakB}</b></div>
+      <div class="kv"><span>Hives now / most</span><b>${G.hives.length} / ${G._maxHives}</b></div>
+      <div class="kv"><span>Honey made</span><b>${G._totH.toFixed(0)} lb</b></div>
+      <div class="kv"><span>Dead zones restored</span><b>${G._tilesRestored}</b></div>
+    </section>`;
+    $('pbody').innerHTML=h;
 }
 
 function renderHivebar(){
@@ -397,7 +435,7 @@ function renderPanel(e){
         }else if(t.type==='DEAD_ZONE'){
             const p=G.restore[k]||0,n=G.pa[k]||0;
             body=`<p class="desc">${d.desc}</p>${bar(p,'greenbar')}<p class="note">${~~p}% restored</p>`+
-              (getStage()<2?`<p class="note warn">Pollinators unlock after your first winter.</p>`:
+              (G._lvl<2?`<p class="note warn">Pollinators open at Level 2, after your first winter.</p>`:
                !ok?`<p class="note warn">Out of range (${dist} hexes). Range grows with colony size.</p>`:
                `<div class="row"><div class="row-top"><span class="rname">Pollinators</span><span class="rnum">${n}</span></div>${steps('pa',`data-k="${k}"`)}</div>`);
         }else if(d.forage){
