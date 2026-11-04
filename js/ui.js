@@ -139,9 +139,8 @@ const ACT={
         if(G.season==='Winter'){toast('Pollinators rest in winter. They head back out in spring.','info');return;}
         const delta=+d.d;if(delta>0)paAdd(d.k,delta);else paRemove(d.k,-delta);
     },
-    psize(d){if(G.sel)G.sel.size=+d.v;},
     pbees(d){if(G.sel)G.sel.n=(G.sel.n||0)+(+d.d);},
-    tripgo(d){if(G.sel&&sendTrip(d.k,G.sel.size||10,G.sel.n))closePanel();},
+    tripgo(d){if(G.sel&&sendTrip(d.k,G.sel.n))closePanel();},
     tripend(d){const t=G.trips.find(x=>x.id===+d.id);if(t)endTrip(t,'The scouts head home');if(G.sel&&G.sel.kind==='fog')closePanel();},
     qmode(d){setQueenMode(d.v);},
     newcomb(d){G.newComb=d.v;},
@@ -273,10 +272,10 @@ function landCards(){
     const out=G.hives.reduce((a,hv)=>a+hv.scouts.reduce((b,x)=>b+x.n,0),0);
     h+=`<section class="card"><h3>Scouting <span class="sub">${out} scout${out===1?'':'s'} out</span></h3>
     ${G.trips.map(t=>{const n=tripBees(t);
-        return`<div class="row"><div class="row-top"><span class="rname">${t.name}</span><span class="rnum">${t.done}/${t.total}</span></div>${bar(t.done/t.total*100,'greenbar')}
-        <div class="rdesc">${t.done} of ${t.total} mapped · ${winter?'waiting for spring':`${n} scout${n===1?'':'s'} · ${tripDays(t)} day${tripDays(t)===1?'':'s'} left`}</div>
+        return`<div class="row"><div class="row-top"><span class="rname">${t.name}</span><span class="rnum">${Math.floor(tripPct(t))}%</span></div>${bar(tripPct(t),'greenbar')}
+        <div class="rdesc">${t.total} hexes · ${winter?'waiting for spring':`${n} scout${n===1?'':'s'} · ${tripDays(t)} day${tripDays(t)===1?'':'s'} left`}</div>
         ${btn('Call them home','tripend',`data-id="${t.id}"`,'wide ghost')}</div>`;}).join('')||'<p class="hint">No scouts out.</p>'}
-    <p class="hint">Tap a dark tile on the Map to pick a patch to map. One hex takes 6 bee-days, so 2 scouts map a hex in 3 days. Up to ${SCOUT_CAP} scouts from each hive, closest hive first.${winter?' Scouts stay home in winter.':''}</p>
+    <p class="hint">Tap a territory on the Map to scout it. It opens all at once when the scouts finish. Each hex is 6 bee-days of work. Up to ${SCOUT_CAP} scouts from each hive, closest hive first.${winter?' Scouts stay home in winter.':''}</p>
     </section>`;
     return h;
 }
@@ -532,28 +531,27 @@ function renderPanel(e){
     const s=G.sel;if(!s)return;
     let title='',body='';
     if(s.kind==='fog'){
-        const tr=tripOf(s.k);let hl=[];
-        title='Unknown Land';
+        const tr=tripOf(s.k),id=terrOfK(s.k),hexes=terrHexes(id),hl=hexes.filter(k=>G.fog[k]);
+        title=terrName(id);
         if(tr){
-            const w=G.season==='Winter';hl=tr.hexes;
-            body=`<p class="desc">Scouts are mapping the ${tr.name.toLowerCase()}, nearest hex first.</p>${bar(tr.done/tr.total*100,'greenbar')}
-              <div class="kv"><span>Mapped</span><b>${tr.done} of ${tr.total}</b></div>
+            const w=G.season==='Winter';
+            body=`<p class="desc">Scouts are mapping this territory. It opens all at once when they finish.</p>${bar(tripPct(tr),'greenbar')}
+              <div class="kv"><span>Mapped</span><b>${Math.floor(tripPct(tr))}% of ${tr.total} hexes</b></div>
               <div class="kv"><span>Scouts</span><b>${w?'home for winter':tripBees(tr)}</b></div>
               <div class="kv"><span>Time left</span><b>${w?'waiting for spring':`about ${tripDays(tr)} days`}</b></div>
               ${btn('Call the scouts home','tripend',`data-id="${tr.id}"`,'wide ghost')}`;
         }else{
-            const size=s.size||10,hexes=patchAt(s.k,size),room=scoutRoomAll();hl=hexes;
+            const room=scoutRoomAll();
             s.n=room?clamp(s.n==null?Math.min(room,SCOUT_CAP):s.n,1,room):0;
-            body=!hexes.some(scoutable)?`<p class="desc">Unexplored.</p><p class="note">Too deep. Pick a dark tile closer to your land.</p>`
-              :`<p class="desc">Scouts map the highlighted patch, one hex at a time, nearest first.</p>
-              <div class="seg">${PATCH.map(([v,l])=>btn(`${l} · ${v}`,'psize',`data-v="${v}"`,size===v?'on':'')).join('')}</div>
+            body=!scoutable(s.k)?`<p class="desc">Unexplored territory, ${hexes.length} hexes.</p><p class="note">Too deep. Scout a territory next to your land first.</p>`
+              :`<p class="desc">Unexplored territory. Scouts map all ${hexes.length} hexes, and the whole territory opens at once when they finish.</p>
               <div class="row"><div class="row-top"><span class="rname">Scouts</span><span class="rnum">${s.n}</span></div>
                 <div class="rdesc">${room} free${G.hives.length>1?` across ${G.hives.length} hives`:''} · up to ${SCOUT_CAP} from each hive, closest first</div>${steps('pbees','')}</div>
-              <div class="kv"><span>Patch</span><b>${hexes.length} hexes</b></div>
+              <div class="kv"><span>Territory</span><b>${hexes.length} hexes</b></div>
               <div class="kv"><span>Trip</span><b>${s.n?`about ${Math.ceil(HEX_WORK*hexes.length/s.n)} days`:'no bees free'}</b></div>
               ${G.season==='Winter'?'<p class="note warn">Scouts stay home in winter.</p>':''}
               ${btn(`Send ${s.n} scout${s.n===1?'':'s'}`,'tripgo',`data-k="${s.k}" ${s.n&&G.season!=='Winter'?'':'disabled'}`,'wide')}
-              <p class="hint">One hex takes 6 bee-days: 2 scouts map a hex in 3 days.${instinctOn()?'':' Scouts must be idle bees.'}</p>`;
+              <p class="hint">Each hex is 6 bee-days of work: 6 scouts map a ${hexes.length}-hex territory in ${Math.ceil(HEX_WORK*hexes.length/6)} days.${instinctOn()?'':' Scouts must be idle bees.'}</p>`;
         }
         if(window._S)window._S.hlPatch(hl,s.k);
     }else if(s.kind==='cell'){

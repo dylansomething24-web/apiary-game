@@ -51,7 +51,7 @@ class GameScene extends Phaser.Scene{
         this.labels=[];
 
         const loaded=load();
-        if(!loaded)setTimeout(()=>ovShow('ov-i'),60);
+        if(!loaded){openFog();setTimeout(()=>ovShow('ov-i'),60);}
         this.scale.getParentBounds();this.scale.refresh();
         this.resetCams();
         this.refresh();renderAll();
@@ -177,11 +177,25 @@ class GameScene extends Phaser.Scene{
     hlPatch(keys,k0){
         const g=this.hlG;g.clear();
         let cx=0,cy=0,n=0;
-        keys.forEach(k=>{const f=G.fog[k];if(!f)return;const{x,y}=h2p(f.q,f.r);cx+=x;cy+=y;n++;g.fillStyle(0xffd060,.12);this.hex(g,x,y,SZ);g.fillPath();g.lineStyle(k===k0?3:1.5,0xffd060,k===k0?.95:.6);this.hex(g,x,y,SZ);g.strokePath();});
+        const ks=new Set(keys);
+        keys.forEach(k=>{const f=G.fog[k];if(!f)return;const{x,y}=h2p(f.q,f.r);cx+=x;cy+=y;n++;g.fillStyle(0xffd060,.16);this.hex(g,x,y,SZ);g.fillPath();
+            // outline the territory as one shape
+            const p=cors(x,y,SZ);g.lineStyle(3,0xffd060,.95);
+            DIRS.forEach(([dq,dr],j)=>{if(ks.has(hkey(f.q+dq,f.r+dr)))return;const a=(6-j)%6,b=(a+1)%6;g.lineBetween(p[a*2],p[a*2+1],p[b*2],p[b*2+1]);});});
         // bring a newly picked patch into the strip of map above the panel
         const sig=k0+':'+n;
         if(n&&sig!==this._pk){this.cam.pan(cx/n,cy/n+this.cam.height*.22/this.cam.zoom,400);}
         this._pk=sig;
+    }
+    // a mapped territory flashes as it opens
+    terrOpen(id){
+        if(G.view!=='map')return;
+        const c=terrCentre(id),p=h2p(c.q,c.r);this.cam.pan(p.x,p.y,500);
+        const g=this.add.graphics().setDepth(4);
+        for(let dq=-TERR_R;dq<=TERR_R;dq++)for(let dr=Math.max(-TERR_R,-dq-TERR_R);dr<=Math.min(TERR_R,-dq+TERR_R);dr++){
+            const{x,y}=h2p(c.q+dq,c.r+dr);g.fillStyle(0xffe080,.35);this.hex(g,x,y,SZ);g.fillPath();
+        }
+        this.tweens.add({targets:g,alpha:0,duration:1600,ease:'Sine.easeIn',onComplete:()=>g.destroy()});
     }
     // a swarm lifts off the hive and drifts off the edge of the map
     swarmFly(q,r){
@@ -201,13 +215,23 @@ class GameScene extends Phaser.Scene{
     // ── MAP ──────────────────────────────────────────────────────────────────
     drawMap(){
         const g=this.mapG;g.clear();
+        const tc={};   // territory of each fog hex, worked out once per draw
+        Object.entries(G.fog).forEach(([k,{q,r}])=>tc[k]=terrOf(q,r));
+        const trips=new Set(G.trips.map(t=>t.terr));
         Object.entries(G.fog).forEach(([k,{q,r,level}])=>{
             const{x,y}=h2p(q,r);
-            const sc=tripOf(k);
-            g.fillStyle(level===1?0x161f17:0x0c120d,1);g.lineStyle(1,level===1?0x2a3a2c:0x141c15,1);
+            g.fillStyle(level===1?0x161f17:0x0c120d,1);g.lineStyle(1,level===1?0x1e2a20:0x111812,1);
             this.hex(g,x,y,SZ);g.fillPath();g.strokePath();
-            if(sc){g.fillStyle(0xe09a18,.25);this.hex(g,x,y,SZ);g.fillPath();}
-            else if(level===1&&scoutable(k)){g.fillStyle(0x3a4a3c,1);g.fillCircle(x,y,2.5);}
+            if(trips.has(tc[k])){g.fillStyle(0xe09a18,.22);this.hex(g,x,y,SZ);g.fillPath();}
+        });
+        // territory borders: an edge is drawn where the hex across it belongs to another territory
+        Object.entries(G.fog).forEach(([k,{q,r,level}])=>{
+            const{x,y}=h2p(q,r),p=cors(x,y,SZ);
+            g.lineStyle(2,trips.has(tc[k])?0xe0a030:level===1?0x6a7a5a:0x2a3424,level===1?.9:.6);
+            DIRS.forEach(([dq,dr],j)=>{
+                const nk=hkey(q+dq,r+dr);if(tc[nk]===tc[k])return;
+                const a=(6-j)%6,b=(a+1)%6;g.lineBetween(p[a*2],p[a*2+1],p[b*2],p[b*2+1]);
+            });
         });
         Object.entries(G.tiles).forEach(([k,t])=>{
             const{x,y}=h2p(t.q,t.r),d=TD[t.type],s=t.stage,ok=inRange(t);
@@ -241,7 +265,16 @@ class GameScene extends Phaser.Scene{
         Object.entries(G.fa).forEach(([k,n])=>{const t=G.tiles[k];if(!t)return;const{x,y}=h2p(t.q,t.r);mk(x,y+SZ*.55,'🐝'+n,'#ffc040');});
         const pk=new Set();G.hives.forEach(h=>Object.keys(h.pa).forEach(k=>pk.add(k)));
         pk.forEach(k=>{const t=G.tiles[k];if(!t)return;const{x,y}=h2p(t.q,t.r);mk(x,y+SZ*.55,'🌱'+paTotal(k),'#70e070');});
-        G.trips.forEach(t=>{const k=t.hexes.length&&nextHex(t),f=k&&G.fog[k];if(!f)return;const{x,y}=h2p(f.q,f.r);mk(x,y,t.done+'/'+t.total,'#e0a030');});
+        // each territory next to your land is named at its middle; one being scouted shows its progress
+        const seen=new Set();
+        Object.values(G.fog).forEach(f=>{
+            if(f.level!==1)return;const id=terrOf(f.q,f.r);if(seen.has(id))return;seen.add(id);
+            const hs=terrHexes(id).map(kq);if(!hs.length)return;
+            const c=terrCentre(id);let at=hs.sort((a,b)=>hdist(a.q,a.r,c.q,c.r)-hdist(b.q,b.r,c.q,c.r))[0];
+            const{x,y}=h2p(at.q,at.r),t=G.trips.find(o=>o.terr===id);
+            const l=this.add.text(x,y,terrName(id).replace(' ','\n')+(t?`\n${Math.floor(tripPct(t))}%`:''),{fontFamily:'Georgia, serif',fontSize:'11px',fontStyle:'italic',align:'center',color:t?'#f0b040':'#8a9a7a',stroke:'#050805',strokeThickness:3}).setOrigin(.5).setDepth(3);
+            l.setVisible(G.view!=='hive');this.labels.push(l);
+        });
     }
 
     // ── HIVE INTERIOR ─────────────────────────────────────────────────────────

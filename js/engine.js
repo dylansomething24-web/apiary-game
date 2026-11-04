@@ -144,6 +144,15 @@ function load(){
         if(!o._spd3){G.speed=o._spd2?1:(SPEEDS.includes(o.speed)?o.speed:3);G._spd3=true;}
         // scouts from before area trips: let them finish now
         G.hives.forEach(h=>{h.scouts.filter(s=>s.k).forEach(s=>withHive(h,()=>revealTile(s.k,true)));h.scouts=h.scouts.filter(s=>!s.k);});
+        // patch trips from before territories: each becomes a trip to the territory it started in, keeping its scouts
+        G.trips=G.trips.filter(t=>{
+            if(t.terr)return true;
+            const k=(t.hexes||[]).find(x=>G.fog[x]);const id=k&&terrOfK(k);
+            if(!id||G.trips.some(o=>o.terr===id)){G.hives.forEach(h=>h.scouts=h.scouts.filter(s=>s.t!==t.id));return false;}
+            t.terr=id;t.name=terrName(id);t.total=terrHexes(id).length;t.work=0;delete t.hexes;delete t.done;delete t.found;
+            return true;
+        });
+        openFog();
         return true;
     }catch(e){return false;}
 }
@@ -366,7 +375,7 @@ const MS=[
     {id:'c60', chk:()=>G.hives.some(h=>Object.keys(h.comb).length>=61),msg:'The comb fills the frame'},
     {id:'h30', chk:()=>G._totH>=30, msg:'Thirty pounds of honey made'},
     {id:'h150',chk:()=>G._totH>=150,msg:"A season's worth of honey"},
-    {id:'s3',  chk:()=>(G._ach._scouted||0)>=3,msg:'Three territories mapped'},
+    {id:'s3',  chk:()=>(G._ach._terr||0)>=3,msg:'Three territories mapped'},
     {id:'w1',  chk:()=>G._wintersS>=1,msg:'First winter — survived'},
     {id:'w2',  chk:()=>G._wintersS>=2,msg:'A second winter endured'},
     {id:'w5',  chk:()=>G._wintersS>=5,msg:'Five winters. The colony endures.'},
@@ -417,7 +426,7 @@ function beginGame(){
 }
 function newGame(){
     const L=lifeRec();L.runs++;lifeSave(L);
-    G=newState();save();
+    G=newState();openFog();save();
     ['ov-g','ov-c'].forEach(ovHide);
     if(window._S)window._S.rebuild();
     setView('map');closePanel();renderAll();

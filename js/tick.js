@@ -301,31 +301,50 @@ function diseasedFlower(){
     });
 }
 
-// ── SCOUTING (area trips, drawn from every hive) ──────────────────────────────
-// A trip maps a connected patch of fog. One hex is 6 bee-days of work, and the hexes reveal one by
-// one, nearest to home first. Scouts come from the hive closest to the patch first, 6 per hive at most.
-const HEX_WORK=6,SCOUT_CAP=6,PATCH=[[5,'Small'],[10,'Medium'],[15,'Large']];
-function scoutable(k){const f=G.fog[k];return!!f&&nbrs(f.q,f.r).some(([q,r])=>G.tiles[hkey(q,r)]);}
-function tripOf(k){return G.trips.find(t=>t.hexes.includes(k));}
-function tripBees(t){let n=0;G.hives.forEach(h=>h.scouts.forEach(s=>{if(s.t===t.id)n+=s.n;}));return n;}
-function tripDays(t){const n=tripBees(t);return n?Math.ceil(Math.max(0,t.hexes.length*HEX_WORK-t.work)/n):0;}
-// up to n connected fog hexes around k (nearest k first) that no other trip has
-function patchAt(k,n){
-    if(!G.fog[k]||tripOf(k))return[];
-    const out=[k],seen=new Set(out);
-    for(let i=0;i<out.length&&out.length<n;i++){
-        const f=G.fog[out[i]];
-        for(const[q,r]of nbrs(f.q,f.r)){
-            const nk=hkey(q,r);if(seen.has(nk))continue;seen.add(nk);
-            if(G.fog[nk]&&!tripOf(nk)){out.push(nk);if(out.length>=n)break;}
-        }
+// ── SCOUTING (territories, drawn from every hive) ─────────────────────────────
+// The land past the start is cut into fixed territories: hexagons of 19 hexes on a set grid, so a
+// territory never changes shape. A trip maps one whole territory and it opens all at once when the
+// work is done. One hex is 6 bee-days of work. Scouts come from the hive closest first, 6 per hive at most.
+const HEX_WORK=6,SCOUT_CAP=6,TERR_R=2;
+const TN1=['Thistle','Bramble','Willow','Aster','Hazel','Cinder','Juniper','Sorrel','Mallow','Ashen','Fennel','Briar','Larch','Tansy','Yarrow','Sedge'];
+const TN2=['Reach','Hollow','Flats','Ridge','Bottoms','Glen','Fields','Run','Downs','Bend','Heath','Barrens'];
+// the territory hex (q,r) belongs to: nearest centre on the lattice (5,-2) / (2,3)
+function terrOf(q,r){
+    const fa=(3*q-2*r)/19,fb=(2*q+5*r)/19;let best=null,bd=1e9;
+    for(const a of[Math.floor(fa),Math.ceil(fa)])for(const b of[Math.floor(fb),Math.ceil(fb)]){
+        const d=hdist(q,r,5*a+2*b,-2*a+3*b);if(d<bd){bd=d;best=a+','+b;}
+    }
+    return best;
+}
+function terrOfK(k){const{q,r}=kq(k);return terrOf(q,r);}
+function terrCentre(id){const[a,b]=id.split(',').map(Number);return{q:5*a+2*b,r:-2*a+3*b};}
+// the hexes of territory id that are still unmapped
+function terrHexes(id){
+    const c=terrCentre(id),out=[];
+    for(let dq=-TERR_R;dq<=TERR_R;dq++)for(let dr=Math.max(-TERR_R,-dq-TERR_R);dr<=Math.min(TERR_R,-dq+TERR_R);dr++){
+        const k=hkey(c.q+dq,c.r+dr);if(!G.tiles[k])out.push(k);
     }
     return out;
 }
-function patchName(k){
-    const f=G.fog[k],p=h2p(f.q,f.r),a=Math.atan2(-p.y,p.x)*180/Math.PI;
-    return['East','Northeast','North','Northwest','West','Southwest','South','Southeast'][((Math.round(a/45)%8)+8)%8]+' patch';
+function terrName(id){
+    // number the territories in a spiral out from home, so the first 192 all get different names
+    const[a,b]=id.split(',').map(Number),R=hdist(a,b);
+    const n=R?1+3*R*(R-1)+ringCells(R).findIndex(([q,r])=>q===a&&r===b):0,x=n%16;
+    return`${TN1[x*7%16]} ${TN2[(Math.floor(n/16)+5*x)%12]}`;
 }
+function terrTouchesLand(id){return terrHexes(id).some(k=>{const{q,r}=kq(k);return nbrs(q,r).some(([nq,nr])=>G.tiles[hkey(nq,nr)]);});}
+function scoutable(k){const f=G.fog[k];return!!f&&terrTouchesLand(terrOf(f.q,f.r));}
+// every territory next to known land shows in full on the map
+function openFog(){
+    const ids=new Set();
+    Object.values(G.tiles).forEach(t=>nbrs(t.q,t.r).forEach(([q,r])=>{if(!G.tiles[hkey(q,r)])ids.add(terrOf(q,r));}));
+    ids.forEach(id=>terrHexes(id).forEach(k=>{const{q,r}=kq(k);if(G.fog[k])G.fog[k].level=1;else G.fog[k]={q,r,level:1};}));
+}
+function tripOf(k){const id=terrOfK(k);return G.trips.find(t=>t.terr===id);}
+function tripBees(t){let n=0;G.hives.forEach(h=>h.scouts.forEach(s=>{if(s.t===t.id)n+=s.n;}));return n;}
+function tripLeft(t){return Math.max(0,t.total*HEX_WORK-t.work);}
+function tripDays(t){const n=tripBees(t);return n?Math.ceil(tripLeft(t)/n):0;}
+function tripPct(t){return t.total?Math.min(100,t.work/(t.total*HEX_WORK)*100):100;}
 // bees hive h could send right now
 function scoutRoom(h){
     return withHive(h,()=>Math.max(0,Math.min(SCOUT_CAP-scoutTotal(),idle()+(instinctOn()?foragerTotal():0))));
@@ -333,7 +352,7 @@ function scoutRoom(h){
 function scoutRoomAll(){return G.hives.reduce((a,h)=>a+scoutRoom(h),0);}
 // pull n scouts for trip t, closest hive first (or back from the hives in `from`); returns how many went
 function pullScouts(t,n,from){
-    const f=G.fog[t.hexes[0]]||{q:0,r:0};
+    const f=terrCentre(t.terr);
     const hs=from||G.hives.slice().sort((a,b)=>hdist(a.q,a.r,f.q,f.r)-hdist(b.q,b.r,f.q,f.r));
     let sent=0;
     for(const h of hs){
@@ -345,16 +364,17 @@ function pullScouts(t,n,from){
     }
     return sent;
 }
-function sendTrip(k,size,n){
+function sendTrip(k,n){
     if(G.season==='Winter'){toast('Scouts stay home in winter. Send them in spring.','warn');return false;}
-    const hexes=patchAt(k,size);
-    if(!hexes.length){toast('Scouts are already mapping this land','warn');return false;}
-    if(!hexes.some(scoutable)){toast('Too deep. Pick a dark tile closer to your land.','warn');return false;}
-    const t={id:++G._tid,name:patchName(k),hexes,total:hexes.length,done:0,work:0,want:{},found:{}};
+    if(!G.fog[k])return false;
+    if(tripOf(k)){toast('Scouts are already mapping this territory','warn');return false;}
+    if(!scoutable(k)){toast('Too deep. Pick a territory next to your land.','warn');return false;}
+    const id=terrOfK(k),hexes=terrHexes(id);
+    const t={id:++G._tid,terr:id,name:terrName(id),total:hexes.length,work:0,want:{}};
     const sent=pullScouts(t,n);
     if(!sent){toast('No bees free to scout','warn');return false;}
     G.trips.push(t);
-    toast(`${sent} scouts are out to the ${t.name.toLowerCase()} (${t.total} hexes, about ${tripDays(t)} days)`,'green');
+    toast(`${sent} scouts are out to ${t.name} (${t.total} hexes, about ${tripDays(t)} days)`,'green');
     return true;
 }
 function endTrip(t,msg){
@@ -362,27 +382,23 @@ function endTrip(t,msg){
     G.trips.splice(G.trips.indexOf(t),1);
     if(msg)toast(msg,'green');
 }
-// the hex of trip t to map next: touching known land, nearest a hive
-function nextHex(t){
-    const near=k=>{const f=G.fog[k];return Math.min(...G.hives.map(h=>hdist(f.q,f.r,h.q,h.r)));};
-    const open=t.hexes.filter(scoutable);
-    return(open.length?open:t.hexes).sort((a,b)=>near(a)-near(b))[0];
+// the whole territory opens at once
+function mapTerritory(t){
+    const found={};
+    terrHexes(t.terr).forEach(k=>{if(!G.fog[k]){const{q,r}=kq(k);G.fog[k]={q,r,level:1};}const ty=revealTile(k,true);found[ty]=(found[ty]||0)+1;});
+    openFog();
+    G._ach._terr=(G._ach._terr||0)+1;
+    const f=Object.entries(found).sort((a,b)=>b[1]-a[1]).map(([ty,c])=>`${c} ${TD[ty].label.toLowerCase()}`).join(', ');
+    endTrip(t,`${t.name} mapped: ${f}. The scouts head home.`);
+    if(window._S&&window._S.terrOpen)window._S.terrOpen(t.terr);
 }
 function tripsDay(){
     if(G.season==='Winter')return;
     G.trips.slice().forEach(t=>{
-        t.hexes=t.hexes.filter(k=>G.fog[k]);
         const n=tripBees(t);
         if(!n){endTrip(t);return;}
         t.work+=n;
-        while(t.work>=HEX_WORK&&t.hexes.length){
-            const k=nextHex(t);t.hexes.splice(t.hexes.indexOf(k),1);
-            const ty=revealTile(k,true);t.found[ty]=(t.found[ty]||0)+1;t.done++;t.work-=HEX_WORK;
-        }
-        if(!t.hexes.length){
-            const f=Object.entries(t.found).sort((a,b)=>b[1]-a[1]).map(([ty,c])=>`${c} ${TD[ty].label.toLowerCase()}`).join(', ');
-            endTrip(t,`${t.name} mapped: ${f}. The scouts head home.`);
-        }
+        if(t.work>=t.total*HEX_WORK)mapTerritory(t);
     });
 }
 // first day of winter: scouts and pollinators come home; first day of spring: they head back out
