@@ -108,7 +108,7 @@ function newState(){
         tiles,fog:makeFog(tiles),restore:{},
         hives:[home],ci:0,_hid:1,
         hmode:'inspect',
-        season:'Spring',day:1,year:1,speed:1,_spd2:true,trips:[],_tid:0,
+        season:'Spring',day:1,year:1,speed:1,_spd3:true,trips:[],_tid:0,
         _nt:30,_totH:0,_peakB:15,_ach:{},
         _wintersS:0,_tilesRestored:0,_colonyName:'',_lvl:1,_maxHives:1,_landPrev:0,
         kp:null,_kDue:false,
@@ -140,7 +140,8 @@ function load(){
         G.view='map';G.sel=null;G._dt=0;G.cams={};G.placing=false;
         if(o._lvl==null){checkLevel(true);G._landPrev=landRank();}   // save from before levels
         if(G.kp)G.kp.name='Rowan';
-        if(!o._spd2){G.speed={0.5:1,1:2,2:3,4:6}[o.speed]||2;G._spd2=true;}   // old speeds onto the new set
+        // the slower pace applies to every save: keep the speed's label, never shift it to hold the old pace
+        if(!o._spd3){G.speed=o._spd2?1:(SPEEDS.includes(o.speed)?o.speed:3);G._spd3=true;}
         // scouts from before area trips: let them finish now
         G.hives.forEach(h=>{h.scouts.filter(s=>s.k).forEach(s=>withHive(h,()=>revealTile(s.k,true)));h.scouts=h.scouts.filter(s=>!s.k);});
         return true;
