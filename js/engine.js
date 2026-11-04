@@ -142,6 +142,7 @@ function load(){
         if(G.kp)G.kp.name='Rowan';
         // the slower pace applies to every save: keep the speed's label, never shift it to hold the old pace
         if(!o._spd3){G.speed=o._spd2?1:(SPEEDS.includes(o.speed)?o.speed:3);G._spd3=true;}
+        delete G._spd2;if(G._ach)delete G._ach._scouted;   // old flags nothing reads any more
         // scouts from before area trips: let them finish now
         G.hives.forEach(h=>{h.scouts.filter(s=>s.k).forEach(s=>withHive(h,()=>revealTile(s.k,true)));h.scouts=h.scouts.filter(s=>!s.k);});
         // patch trips from before territories: each becomes a trip to the territory it started in, keeping its scouts
