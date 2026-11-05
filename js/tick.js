@@ -175,9 +175,12 @@ function hiveDay(){
     if(G.kp)superFlow();
     rebalance();
 
+    // the land rests in winter: no restoring, no healing
+    const growing=G.season!=='Winter';
+
     // Pollinators restore dead zones
     const bonus=owns('poll2')?1.2:1;
-    Object.entries(G.pa).forEach(([k,n])=>{
+    if(growing)Object.entries(G.pa).forEach(([k,n])=>{
         const t=G.tiles[k];if(!t||t.type!=='DEAD_ZONE'){delete G.pa[k];return;}
         G.restore[k]=Math.min(100,(G.restore[k]||0)+n*PA_RATE*bonus);
         if(G.restore[k]>=100){
@@ -188,7 +191,7 @@ function hiveDay(){
     });
 
     // Foraging heals the land (slowly)
-    Object.entries(G.fa).forEach(([k,n])=>{
+    if(growing)Object.entries(G.fa).forEach(([k,n])=>{
         const t=G.tiles[k];if(!t||t.stage>=3||!TD[t.type].forage)return;
         if(Math.random()<n*HEAL_RATE){t.stage++;toast(`${TD[t.type].label} is ${STG[t.stage].toLowerCase()} now — more nectar`,'green');}
     });
