@@ -111,11 +111,11 @@ class GameScene extends Phaser.Scene{
         this.applyCam('map');
     }
     applyCam(v){
-        if(v==='colony'||v==='supers'||v==='house')return;
+        if(v==='colony'||v==='supers'||v==='house'||v==='shop')return;
         if(v==='hive'&&!G.cams.hive){this.fitHive();return;}
         const c=G.cams[v];this.cam.setZoom(c.z);this.cam.centerOn(c.x,c.y);
     }
-    saveCam(){if(G.view==='colony'||G.view==='supers'||G.view==='house')return;const m=this.cam.midPoint;G.cams[G.view]={x:m.x,y:m.y,z:this.cam.zoom};}
+    saveCam(){if(G.view==='colony'||G.view==='supers'||G.view==='house'||G.view==='shop')return;const m=this.cam.midPoint;G.cams[G.view]={x:m.x,y:m.y,z:this.cam.zoom};}
     setZoom(z){const c=this.cam,x=c.scrollX+c.width/2,y=c.scrollY+c.height/2;c.setZoom(clamp(z,.4,3));c.centerOn(x,y);this.clampCam();}
     // keep the comb / map from being dragged off-screen
     clampCam(){

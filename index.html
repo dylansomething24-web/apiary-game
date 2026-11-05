@@ -54,7 +54,7 @@ button:disabled{opacity:.35;}
 .seg.four{grid-template-columns:repeat(4,1fr);}
 .seg button.off{opacity:.45;}
 
-/* Levels and progress */
+/* Records and upgrades */
 #h-stage{cursor:pointer;color:var(--amber2);}
 .ov-sheet{background:var(--bg);border:1px solid var(--line2);border-radius:14px;max-width:440px;width:100%;max-height:100%;display:flex;flex-direction:column;overflow:hidden;}
 .ps-head{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid var(--line);flex:none;}
@@ -72,6 +72,7 @@ button:disabled{opacity:.35;}
 .lvrow.cur .rname{color:var(--amber);}
 .lvrow.lock{opacity:.5;}
 .lvi{color:var(--amber2)!important;}
+.lvcard{max-height:100%;overflow-y:auto;}
 .lvcard ul{margin:0 0 14px 18px;color:var(--text);font-size:.95rem;line-height:1.6;}
 .lv-inst{background:#1a2410;border:1px solid #5a6a2a;border-radius:10px;padding:10px 12px;margin-bottom:6px;}
 .lv-inst b{display:block;color:var(--amber);font-weight:600;margin-bottom:4px;}
@@ -210,6 +211,8 @@ button:disabled{opacity:.35;}
 #tabs{display:flex;background:#0d150e;border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0px);flex:none;}
 .tab{flex:1;background:none;border:none;border-top:2px solid transparent;padding:12px 4px 10px;font:italic 1rem var(--serif);color:var(--faint);}
 .tab.on{color:var(--amber);border-top-color:var(--amber);}
+.tab{position:relative;line-height:1.15;}
+.tab.dot::after{content:'';position:absolute;top:7px;right:calc(50% - 34px);width:7px;height:7px;border-radius:50%;background:var(--amber);}
 
 /* Overlays */
 .ov{position:fixed;inset:0;z-index:100;display:none;align-items:center;justify-content:center;background:rgba(4,8,5,.9);padding:20px;}
@@ -239,7 +242,7 @@ button:disabled{opacity:.35;}
         </div>
         <div class="hrow2">
             <span id="h-date">Spring · Day 1 · Year 1</span>
-            <span id="h-stage" data-a="progress">Lv 1 · New Swarm ›</span>
+            <span id="h-stage" data-a="progress">Records ›</span>
             <span id="h-money" data-a="view" data-v="house" hidden>$0</span>
             <button id="pause-btn" class="hbtn" data-a="pause">❚❚</button>
             <button id="speed-btn" class="hbtn" data-a="speed">1×</button>
@@ -252,6 +255,7 @@ button:disabled{opacity:.35;}
         <div id="game"></div>
         <section id="colony" hidden><nav id="ctabs"></nav><div id="cbody"></div></section>
         <section id="supers" class="pane" hidden><div id="sbody" class="pbody"></div></section>
+        <section id="shop" class="pane" hidden><div id="ubody" class="pbody"></div></section>
         <section id="house" class="pane" hidden><nav id="htabs" class="subtabs"></nav><div id="hbody" class="pbody"></div></section>
         <div id="hivebar" hidden>
             <div class="seg">
@@ -286,6 +290,7 @@ button:disabled{opacity:.35;}
         <button class="tab" id="tab-hive" data-a="view" data-v="hive">Hive</button>
         <button class="tab" data-a="view" data-v="colony">Colony</button>
         <button class="tab" id="tab-house" data-a="view" data-v="house" hidden>Honey House</button>
+        <button class="tab" id="tab-shop" data-a="view" data-v="shop">Upgrades</button>
     </nav>
 </div>
 
@@ -293,7 +298,7 @@ button:disabled{opacity:.35;}
     <div class="ov-card">
         <h2>The Apiary</h2>
         <p>A swarm has found a home in a land gone quiet. Fifteen bees, a queen, and a little comb.</p>
-        <p><b style="color:var(--amber2)">Map</b>: send foragers to flowers for nectar.<br><b style="color:var(--amber2)">Hive</b>: see the comb and choose where the queen lays.<br><b style="color:var(--amber2)">Colony</b>: give every bee a job.</p>
+        <p><b style="color:var(--amber2)">Map</b>: send foragers to flowers for nectar.<br><b style="color:var(--amber2)">Hive</b>: see the comb and choose where the queen lays.<br><b style="color:var(--amber2)">Colony</b>: give every bee a job.<br><b style="color:var(--amber2)">Upgrades</b>: spend honey as the colony grows, so the bees take on more by themselves.</p>
         <input class="ov-inp" id="col-name-in" placeholder="Name your colony (optional)">
         <button class="ov-btn" data-a="begin">Begin</button>
     </div>
@@ -315,13 +320,14 @@ button:disabled{opacity:.35;}
         <h2 id="lv-name"></h2>
         <p id="lv-story"></p>
         <div id="lv-list"></div>
-        <button class="ov-btn" data-a="lvlok">Continue</button>
+        <button class="ov-btn" data-a="newgo">Open Upgrades</button>
+        <button class="ov-btn" data-a="newok">Later</button>
     </div>
 </div>
 
 <div class="ov" id="ov-p">
     <div class="ov-sheet">
-        <div class="ps-head"><h2>Progress</h2><button class="hbtn" data-a="progclose">Close</button></div>
+        <div class="ps-head"><h2>Records</h2><button class="hbtn" data-a="progclose">Close</button></div>
         <div id="pbody"></div>
     </div>
 </div>
@@ -342,7 +348,7 @@ button:disabled{opacity:.35;}
         <h2>The Colony Has Fallen</h2>
         <p id="gm-year"></p>
         <p id="gm-name" style="color:var(--amber2);font-style:italic"></p>
-        <div class="gm-row">Level reached<b id="gm-stage"></b></div>
+        <div class="gm-row">Upgrades bought<b id="gm-stage"></b></div>
         <div class="gm-row">Peak population<b id="gm-peak"></b></div>
         <div class="gm-row">Honey made<b id="gm-honey"></b></div>
         <div class="gm-row">Winters survived<b id="gm-winters"></b></div>
@@ -354,6 +360,7 @@ button:disabled{opacity:.35;}
 <script src="phaser.min.js"></script>
 <script src="js/engine.js"></script>
 <script src="js/tick.js"></script>
+<script src="js/upgrades.js"></script>
 <script src="js/instinct.js"></script>
 <script src="js/keeper.js"></script>
 <script src="js/ui.js"></script>

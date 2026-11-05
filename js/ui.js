@@ -27,11 +27,10 @@ function showChoice({icon,title,body,a,b}){
 
 // ── ALERTS (most urgent problem, always visible) ──────────────────────────────
 function alerts(e){
-    const out=[];
-    if(instinctOn())return alerts5(e);
-    if(G.honey<1&&e.net<0)out.push(['bad','Out of honey — bees are starving. Send foragers and keep processors working.']);
-    if(e.bs.larvae>e.nurseCap)out.push(['bad',`Only ${e.nurseCap} of ${e.bs.larvae} larvae can be fed — add nurses.`]);
-    if(G.season!=='Winter'&&e.bs.empty===0)out.push(e.dpg&&G.builders>0
+    const out=[],A=jobAuto;
+    if(G.honey<1&&e.net<0)out.push(['bad',A('foragers')&&A('processors')?'Out of honey — the bees are starving.':'Out of honey — bees are starving. Send foragers and keep processors working.']);
+    if(e.bs.larvae>e.nurseCap)out.push(['bad',A('nurses')?`Only ${e.nurseCap} of ${e.bs.larvae} larvae can be fed — the hive is short of bees.`:`Only ${e.nurseCap} of ${e.bs.larvae} larvae can be fed — add nurses.`]);
+    if(!A('builders')&&G.season!=='Winter'&&e.bs.empty===0)out.push(e.dpg&&G.builders>0
         ?['warn','Brood cells are full — builders are deepening storage, not adding comb. Pause it in Colony → Hive.']
         :G.builders>0&&e.canBuild
         ?['info','Brood cells are full — the queen waits while builders add comb.']
@@ -42,29 +41,14 @@ function alerts(e){
         if(G._up&&!G.sup.length&&!boxesStored())out.push(['warn','No spare supers in the Storehouse.']);
         else if(!G.sup.length&&boxesStored())out.push(['info','This hive has no supers. Put some on in Supers.']);
     }
-    if(G.honey+G.nectar>=e.cap-0.5&&e.nectarIn>0&&!(G.kp&&supRoom()>1))out.push(['warn',G.kp?'Brood box and supers are full. Add or pull supers.':'Storage full — add builders or paint storage cells.']);
-    if(G.nectar>4&&e.nectarIn>e.procCap)out.push(['warn','Nectar is piling up — add processors.']);
-    if(G.season==='Fall'&&G.honey<winterNeed())out.push(['warn',`Winter needs ~${winterNeed()} lb honey — you have ${G.honey.toFixed(0)}.`]);
-    if(foragerTotal()===0&&G.season!=='Winter')out.push(['info','No foragers out — tap a flower tile next to the hive, or use Colony → Land.']);
-    if(idle()>3&&G.season!=='Winter')out.push(['info',`${idle()} bees are idle — give them work in the Colony tab.`]);
-    if(G.guards<guardsNeeded()&&(G.year-1)*YEAR+G.day>15)out.push(['info',`Guards ${G.guards}/${guardsNeeded()} — raiders can get in.`]);
-    return out;
-}
-
-// Level 5: the hives run their own jobs, so only problems the player can act on show
-function alerts5(e){
-    const out=[];
-    if(G.honey<1&&e.net<0)out.push(['bad','Out of honey — the bees are starving.']);
-    if(e.bs.larvae>e.nurseCap)out.push(['bad',`Only ${e.nurseCap} of ${e.bs.larvae} larvae can be fed — the hive is short of bees.`]);
-    if(G.swarm>=60&&G.season!=='Winter')out.push([G.swarm>=85?'bad':'warn',`Swarm pressure ${~~G.swarm}% — tap to split or raise a queen cell.`,'swarm']);
-    if(G.kp&&G.season!=='Winter'){
-        if(G.sup.some(supFull))out.push(['warn',G.sup.length<MAX_SUP&&boxesStored()?'A super is 90% full. Pull it or add another.':'A super is 90% full. Pull it to make room.']);
-        if(G._up&&!G.sup.length&&!boxesStored())out.push(['warn','No spare supers in the Storehouse.']);
-        else if(!G.sup.length&&boxesStored())out.push(['info','This hive has no supers. Put some on in Supers.']);
-    }
-    if(G.honey+G.nectar>=e.cap-0.5&&e.nectarIn>0&&!(G.kp&&supRoom()>1))out.push(['warn',G.kp?'Brood box and supers are full. Add or pull supers.':'The comb is full — nectar is being turned away.']);
-    if(G.season==='Fall'&&G.honey<winterReserve())out.push(['warn',`Short of the winter reserve: ${G.honey.toFixed(0)} / ${winterReserve()} lb. Building has stopped.`]);
-    if(G._rest>3&&G.season!=='Winter')out.push(['info',`${G._rest} bees have no open field. Scout or heal more land.`]);
+    if(G.honey+G.nectar>=e.cap-0.5&&e.nectarIn>0&&!(G.kp&&supRoom()>1))out.push(['warn',G.kp?'Brood box and supers are full. Add or pull supers.':A('builders')?'The comb is full — nectar is being turned away.':'Storage full — add builders or paint storage cells.']);
+    if(!A('processors')&&G.nectar>4&&e.nectarIn>e.procCap)out.push(['warn','Nectar is piling up — add processors.']);
+    if(G.season==='Fall'&&A('builders')&&G.honey<winterReserve())out.push(['warn',`Short of the winter reserve: ${G.honey.toFixed(0)} / ${winterReserve()} lb. Building has stopped.`]);
+    else if(G.season==='Fall'&&G.honey<winterNeed())out.push(['warn',`Winter needs ~${winterNeed()} lb honey — you have ${G.honey.toFixed(0)}.`]);
+    if(!A('foragers')&&foragerTotal()===0&&G.season!=='Winter')out.push(['info','No foragers out — tap a flower tile next to the hive, or use Colony → Land.']);
+    if(!A('foragers')&&idle()>3&&G.season!=='Winter')out.push(['info',`${idle()} bees are idle — give them work in the Colony tab.`]);
+    if(A('foragers')&&G._rest>3&&G.season!=='Winter')out.push(['info',`${G._rest} bees have no open field. Scout or heal more land.`]);
+    if(!A('guards')&&G.guards<guardsNeeded()&&(G.year-1)*YEAR+G.day>15)out.push(['info',`Guards ${G.guards}/${guardsNeeded()} — raiders can get in.`]);
     return out;
 }
 
@@ -77,8 +61,7 @@ function hud(e,fromTick){
     const net=$('h-net');net.textContent=sgn(e.net)+'/day';net.className='hv '+(e.net>=0?'good':'bad');
     $('h-date').textContent=`${G.season} · Day ${dayInSeason(G.day)} · Year ${G.year}`;
     $('h-date').style.color=SCOL[G.season];
-    $('h-stage').style.flex=G.kp?'none':'';
-    $('h-stage').textContent=G.kp?`Lv ${G._lvl} ›`:`Lv ${G._lvl} · ${LEVELS[G._lvl].name} ›`;
+    $('tab-shop').classList.toggle('dot',shopDot());
     const kp=G.kp;$('h-money').hidden=!kp;
     if(kp){$('h-money').textContent='$'+money(kp.money)+(kp.debt?' · owe $'+money(kp.debt):'');$('h-money').classList.toggle('bad',kp.debt>0);}
     $('tab-house').hidden=!kp;const t2=$('tab-hive');t2.textContent=kp?'Supers':'Hive';t2.dataset.v=kp?'supers':'hive';
@@ -106,14 +89,14 @@ function hud(e,fromTick){
 // ── ACTIONS (every button in the game goes through here) ──────────────────────
 const ACT={
     role(d){
-        if(instinctOn()){toast('The hives plan their own jobs now','info');return;}
+        if(jobAuto(d.r)){toast('The hives handle this job on their own now','info');return;}
         const r=d.r,delta=+d.d;
         if(delta>0){const n=Math.min(delta,idle());if(!n){toast('No idle bees — take some off another job first','warn');return;}G[r]+=n;}
         else G[r]=Math.max(0,G[r]+delta);
     },
     fa(d){
         const k=d.k,delta=+d.d,t=G.tiles[k];
-        if(instinctOn()){toast('The hives send their own foragers now','info');return;}
+        if(jobAuto('foragers')){toast('The hives send their own foragers now','info');return;}
         if(delta>0){
             if(isMill(k)){toast('The bees no longer forage where a mill stands','warn');return;}
             if(!inRange(t)){toast('Too far — the colony needs more bees to reach it','warn');return;}
@@ -126,6 +109,7 @@ const ACT={
     farecall(d){delete G.fa[d.k];},
     farecallall(){G.fa={};},
     autoforage(){
+        if(jobAuto('foragers'))return;
         let n=idle();if(!n){toast('No idle bees to send','warn');return;}
         const ks=Object.keys(G.tiles).filter(k=>inRange(G.tiles[k])&&TD[G.tiles[k].type].forage&&!isMill(k)).sort((a,b)=>tileYield(b)-tileYield(a));
         if(!ks.length){toast('No flowers in range','warn');return;}
@@ -135,7 +119,7 @@ const ACT={
         toast(`${sent} bees sent to ${used} field${used>1?'s':''}${n?` (${n} still idle — the fields are full)`:''}`,'green');
     },
     pa(d){
-        if(G._lvl<2){toast('Pollinators open at Level 2, after your first winter','warn');return;}
+        if(!owns('poll')){toast('Buy Pollinators in Upgrades first. They open after your first winter.','warn');return;}
         if(G.season==='Winter'){toast('Pollinators rest in winter. They head back out in spring.','info');return;}
         const delta=+d.d;if(delta>0)paAdd(d.k,delta);else paRemove(d.k,-delta);
     },
@@ -151,6 +135,7 @@ const ACT={
     view(d){if(d.t)G.ctab=d.t;if(d.h)G.htab=d.h;setView(d.v);},
     ctab(d){G.ctab=d.v;},
     deepen(){
+        if(owns('a_deep')){toast('The builders deepen the comb on their own now','info');return;}
         if((G.combLvl||0)>=DEEP_CAPS.length-1)return;
         G.deepen=!G.deepen;
         if(G.deepen&&!G.builders)toast('Deepening needs builders — assign some in Colony → Workers','warn');
@@ -163,7 +148,10 @@ const ACT={
     prepswarm(){prepSwarm();},
     progress(){renderProgress();ovShow('ov-p');$('pbody').scrollTop=0;return'norender';},
     progclose(){ovHide('ov-p');},
-    lvlok(){ovHide('ov-l');showNextLevel();},
+    progshop(){ovHide('ov-p');setView('shop');},
+    newok(){ovHide('ov-l');_newQ=[];},
+    newgo(){ovHide('ov-l');_newQ=[];setView('shop');},
+    buyup(d){buyUp(d.id);},
     gohive(d){
         const i=+d.i;if(!G.hives[i]||i===G.ci)return;
         G.ci=i;closePanel();G.cams.hive=null;if(window._S)window._S.focusHive();
@@ -177,7 +165,7 @@ const ACT={
     dosplit(d){if(doSplit(d.k)&&window._S)window._S.focusHive();},
     replay(d,btn){
         if(btn.dataset.armed){ovHide('ov-p');newGame();return;}
-        btn.dataset.armed='1';btn.textContent='Tap again to start over at Level 1';
+        btn.dataset.armed='1';btn.textContent='Tap again to start over';
         setTimeout(()=>{if(btn.isConnected){delete btn.dataset.armed;btn.textContent='Replay from the beginning';}},3000);
         return'norender';
     },
@@ -187,7 +175,7 @@ const ACT={
     swcell(d){const h=G.hives[+d.i];if(h)withHive(h,prepSwarm);},
     goswarm(d){
         const h=G.hives[+d.i];if(!h)return;
-        G.ci=G.hives.indexOf(h);G.ctab=instinctOn()?'swarms':'queen';setView('colony');
+        G.ci=G.hives.indexOf(h);G.ctab=allJobsAuto()?'swarms':'queen';setView('colony');
         setTimeout(()=>{const el=$('sw-'+h.id);if(el){el.scrollIntoView({block:'start'});el.classList.add('flash');}},0);
     },
 };
@@ -218,7 +206,7 @@ function setView(v){
     if(window._S)window._S.saveCam();
     G.view=v;if(v!=='map')G.placing=false;closePanel();
     document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on',t.dataset.v===v));
-    $('colony').hidden=v!=='colony';$('supers').hidden=v!=='supers';$('house').hidden=v!=='house';
+    $('colony').hidden=v!=='colony';$('supers').hidden=v!=='supers';$('house').hidden=v!=='house';$('shop').hidden=v!=='shop';
     $('hivebar').hidden=v!=='hive';
     if(window._S)window._S.showView(v);
     renderAll();
@@ -234,6 +222,7 @@ function renderAll(fromTick){
     if(G.view==='hive')renderHivebar();
     if(G.view==='supers')renderSupers();
     if(G.view==='house')renderHouse();
+    if(G.view==='shop')renderShop();
     if(G.sel)renderPanel(e);
 }
 
@@ -242,8 +231,9 @@ const steps=(a,data,big=true)=>`<div class="steps">${(big?[-5,-1,1,5]:[-1,1]).ma
 const bar=(pct,cls='')=>`<div class="bar ${cls}"><i style="width:${clamp(pct,0,100)}%"></i></div>`;
 
 function roleRow(key,label,desc,status){
-    return`<div class="row"><div class="row-top"><span class="rname">${label}</span><span class="rnum">${G[key]}</span></div>
-    <div class="rdesc ${status||''}">${desc}</div>${steps('role',`data-r="${key}"`)}</div>`;
+    const auto=jobAuto(key);
+    return`<div class="row"><div class="row-top"><span class="rname">${label}${auto?' <span class="lvtag">Auto</span>':''}</span><span class="rnum">${G[key]}</span></div>
+    <div class="rdesc ${status||''}">${desc}</div>${auto?'':steps('role',`data-r="${key}"`)}</div>`;
 }
 
 // pollinators and scouts: still the player's job at every level, pooled across the hives
@@ -254,11 +244,11 @@ function landCards(){
     const reach=k=>paHives(k).length>0,near=k=>{const t=G.tiles[k];return Math.min(...G.hives.map(hv=>hdist(t.q,t.r,hv.q,hv.r)));};
     const count=k=>paTotal(k)+(winter?G.hives.reduce((a,hv)=>a+((hv._paW||{})[k]||0),0):0);
     h+=`<section class="card"><h3>Pollinators <span class="sub">${dz.reduce((a,k)=>a+count(k),0)} restoring</span></h3>`;
-    if(G._lvl<2)h+=`<p class="hint">Locked until your colony survives its first winter. Then pollinators can bring dead zones back to life.</p>`;
+    if(!owns('poll'))h+=`<p class="hint">${upOpen(upById('poll'))?'Pollinators are open in Upgrades. Buy them to bring dead zones back to life.':'Pollinators open in Upgrades after your first winter. They bring dead zones back to life.'}</p>`;
     else if(!dz.length)h+=`<p class="hint">No dead zones on your land.</p>`;
     else{
         dz.sort((a,b)=>reach(b)-reach(a)||count(b)-count(a)||(G.restore[b]||0)-(G.restore[a]||0)||near(a)-near(b));
-        const rate=PA_RATE*(G._lvl>=3?1.2:1),far=dz.filter(k=>!reach(k)&&!count(k)).length;
+        const rate=PA_RATE*(owns('poll2')?1.2:1),far=dz.filter(k=>!reach(k)&&!count(k)).length;
         h+=dz.filter(k=>reach(k)||count(k)).map(k=>{const ok=reach(k),p=G.restore[k]||0,n=count(k);
             const from=G.hives.length>1&&paTotal(k)?' · '+G.hives.filter(hv=>hv.pa[k]).map(hv=>`${hv.name} ${hv.pa[k]}`).join(', '):'';
             return`<div class="frow"><div class="fi"><div class="rname">Dead Zone · ${near(k)} out</div>${bar(p,'greenbar')}
@@ -280,9 +270,19 @@ function landCards(){
     return h;
 }
 
+// fields card when the hives send their own foragers
+function autoFields(e){
+    const fk=Object.keys(G.fa).sort((a,b)=>tileYield(b)*G.fa[b]-tileYield(a)*G.fa[a]);
+    return`<section class="card"><h3>Fields <span class="sub">${H().name} · ${foragerTotal()} out · ${f1(e.nectarIn)} lb nectar/day</span></h3>
+      ${fk.length?fk.map(k=>{const t=G.tiles[k];return`<div class="kv"><span>${TD[t.type].label} · ${STG[t.stage]} · ${hiveDist(t)} out</span><b>${G.fa[k]} · ${f1(tileYield(k)*G.fa[k])} lb</b></div>`;}).join('')
+        :`<p class="hint">${G.season==='Winter'?'No foraging in winter.':'No open fields in reach.'}</p>`}
+      ${G._rest>0&&G.season!=='Winter'?`<p class="note warn">${G._rest} bees have no open field. Scout or heal more land.</p>`:''}
+      <p class="hint">The hives send their own foragers to the best open fields each day. Reach: ${G.frad} tile${G.frad>1?'s':''}. Switch hives with the chips at the top.</p></section>`;
+}
+
 // one Swarm and split card per hive
 function swarmCard(hv,i){return withHive(hv,()=>{
-    const cs=canSplit(),pl=splitPlan(),lv=G._lvl>=3;
+    const cs=canSplit(),pl=splitPlan(),lv=owns('split');
     return`<section class="card" id="sw-${hv.id}"><h3>Swarm and split <span class="sub">${hv.name} · ${hv.bees} bees</span></h3>
       <div class="kv"><span>Swarm pressure</span><b class="${G.swarm>=85?'bad':G.swarm>=60?'warn':''}">${~~G.swarm}%</b></div>${bar(G.swarm,'redbar')}
       <div class="pair">${btn('Split the hive','swsplit',`data-i="${i}" ${cs.ok?'':'disabled'}`,'wide')}${btn('Raise a queen cell','swcell',`data-i="${i}" ${G.swarm>0&&G.honey>=5?'':'disabled'}`,'wide')}</div>
@@ -293,15 +293,15 @@ function swarmCard(hv,i){return withHive(hv,()=>{
     </section>`;
 });}
 
-// ── COLONY PAGE FROM LEVEL 5 (the hives run themselves) ───────────────────────
+// ── COLONY PAGE ONCE EVERY JOB IS AUTOMATED (the hives run themselves) ────────
 const CTABS5=[['hives','Hives'],['land','Land'],['swarms','Swarms']];
 let _hx={};   // which hive rows are open on the Hives tab
-function renderColony5(e){
+function renderColonyAuto(e){
     if(!CTABS5.some(t=>t[0]===G.ctab))G.ctab='hives';
     const tab=G.ctab;let h='';
     if(tab==='hives'){
-        h+=`<section class="card"><h3>Hive instincts <span class="sub">running on their own</span></h3>
-          ${instincts().map(v=>`<div class="kv"><span>${v.inst}</span><b class="good">on</b></div>`).join('')}
+        h+=`<section class="card"><h3>Automations <span class="sub">running on their own</span></h3>
+          ${UPG.filter(u=>u.auto&&owns(u.id)).map(u=>`<div class="kv"><span>${u.name}</span><b class="good">on</b></div>`).join('')}
           <p class="hint">Every hive plans its own jobs each morning and keeps a winter reserve before it builds. Pollinators, scouts, splitting and supers are still yours.</p></section>`;
         h+=`<section class="card"><h3>Hives <span class="sub">${G.hives.length} / ${MAX_HIVES} · ${totalBees()} bees</span></h3>`;
         G.hives.forEach((hv,i)=>{withHive(hv,()=>{
@@ -334,16 +334,10 @@ function renderColony5(e){
         });});
         h+=`</section>`;
         h+=`<section class="card"><h3>${G._colonyName||'Your Colony'}</h3>
-          <div class="kv"><span>Level</span><b>${G._lvl} · ${LEVELS[G._lvl].name}</b></div>
-          ${btn('See progress and levels','progress','','wide')}</section>`;
+          ${btn('See records','progress','','wide')}</section>`;
     }
     if(tab==='land'){
-        const fk=Object.keys(G.fa).sort((a,b)=>tileYield(b)*G.fa[b]-tileYield(a)*G.fa[a]);
-        h+=`<section class="card"><h3>Fields <span class="sub">${H().name} · ${foragerTotal()} out · ${f1(e.nectarIn)} lb nectar/day</span></h3>
-          ${fk.length?fk.map(k=>{const t=G.tiles[k];return`<div class="kv"><span>${TD[t.type].label} · ${STG[t.stage]} · ${hiveDist(t)} out</span><b>${G.fa[k]} · ${f1(tileYield(k)*G.fa[k])} lb</b></div>`;}).join('')
-            :`<p class="hint">${G.season==='Winter'?'No foraging in winter.':'No open fields in reach.'}</p>`}
-          ${G._rest>0&&G.season!=='Winter'?`<p class="note warn">${G._rest} bees have no open field. Scout or heal more land.</p>`:''}
-          <p class="hint">The hives send their own foragers to the best open fields each day. Reach: ${G.frad} tile${G.frad>1?'s':''}. Switch hives with the chips at the top.</p></section>`;
+        h+=autoFields(e);
         h+=landCards();
     }
     if(tab==='swarms'){
@@ -357,15 +351,15 @@ function renderColony5(e){
 const CTABS=[['hive','Hive'],['workers','Workers'],['land','Land'],['queen','Queen']];
 let _lastCtab='';
 function renderColony(e){
-    if(instinctOn())return renderColony5(e);
-    const bs=e.bs,stage=G._lvl,gn=guardsNeeded();
+    if(allJobsAuto())return renderColonyAuto(e);
+    const bs=e.bs,aq=owns('a_queen'),gn=guardsNeeded();
     const fill=(G.honey+G.nectar)/Math.max(1,e.cap)*100;
     if(!CTABS.some(t=>t[0]===G.ctab))G.ctab='hive';
     const tab=G.ctab;
     let h='';
 
     if(tab==='hive'){
-    if(stage>=4)h+=`<section class="card"><h3>Queen and brood <span class="sub">Auto</span></h3>
+    if(aq)h+=`<section class="card"><h3>Queen and brood <span class="sub">Auto</span></h3>
     <div class="kv"><span>Laying</span><b>${e.layRate} eggs/day</b></div>
     <div class="kv"><span>Brood cells</span><b>${bs.total} (${bs.empty} empty)</b></div>
     <div class="brood-mix"><span>Eggs ${bs.eggs}</span><span>Larvae ${bs.larvae}</span><span>Capped ${bs.capped}</span>${bs.dead?`<span class="bad">Dead ${bs.dead}</span>`:''}</div>
@@ -387,6 +381,7 @@ function renderColony(e){
 
     if(tab==='workers'){
     h+=`<section class="card"><h3>Workers <span class="sub">${G.bees} bees · <b class="${idle()?'warn':''}">${idle()} idle</b></span></h3>
+    ${anyJobAuto()?'<p class="hint">Jobs marked Auto are planned by the hive every morning. Bees you send by hand give way when an Auto job needs them.</p>':''}
     ${roleRow('nurses','Nurses',`Feed larvae (honey from stores). Can feed ${e.nurseCap}; ${bs.larvae} larvae now.`,bs.larvae>e.nurseCap?'bad':'good')}
     ${roleRow('processors','Processors',`Turn nectar into honey: ${f1(e.procCap)} lb nectar/day max → ${f1(e.procCap*PROC_EFF)} lb honey.`,e.nectarIn>e.procCap?'warn':'')}
     ${roleRow('builders','Builders',e.dpg?`Deepening storage: ${f1(e.deepRate)} cells/day, using ${f1(e.buildCost)} lb honey as wax.${G.season==='Winter'?' Resting for winter.':''}`:e.canBuild?`Draw ${f1(e.buildRate)} new cells/day, using ${f1(e.buildCost)} lb honey as wax.`:'The comb is at full size.','')}
@@ -394,7 +389,8 @@ function renderColony(e){
     </section>`;
     }
 
-    if(tab==='land'){
+    if(tab==='land'&&jobAuto('foragers'))h+=autoFields(e);
+    else if(tab==='land'){
     const fk=Object.keys(G.fa).sort((a,b)=>tileYield(b)*G.fa[b]-tileYield(a)*G.fa[a]);
     const mini=(a,k)=>`<button data-a="${a}" data-k="${k}" data-d="-1">−</button><button data-a="${a}" data-k="${k}" data-d="1">+</button>`;
     h+=`<section class="card"><h3>Foragers <span class="sub">${foragerTotal()} out · ${f1(e.nectarIn)} lb nectar/day</span></h3>
@@ -405,19 +401,18 @@ function renderColony(e){
     <p class="hint">Reach: ${G.frad} tile${G.frad>1?'s':''} (grows at 100 and 250 bees). Each field feeds only so many foragers, and far flowers give less. Send picks the best open fields.</p>
     </section>`;
 
-    h+=landCards();
     }
+    if(tab==='land')h+=landCards();
 
     if(tab==='queen'){
-    const locked=G.hives.length<2;
-    const qb=(m,l)=>btn(l,'qmode',`data-v="${m}"`,(G.qMode===m?'on ':'')+(m==='auto'&&locked?'off':''));
-    if(stage<4)h+=`<section class="card"><h3>Queen</h3>
+    const qb=(m,l)=>btn(l,'qmode',`data-v="${m}"`,G.qMode===m?'on':'');
+    if(!aq)h+=`<section class="card"><h3>Queen</h3>
     <div class="kv"><span>Laying</span><b>${e.layRate} eggs/day${G.qMode==='auto'?' (auto)':''}</b></div>
     <div class="kv"><span>Brood cells</span><b>${bs.total} (${bs.empty} empty)</b></div>
     <div class="brood-mix"><span>Eggs ${bs.eggs}</span><span>Larvae ${bs.larvae}</span><span>Capped ${bs.capped}</span>${bs.dead?`<span class="bad">Dead ${bs.dead}</span>`:''}</div>
-    <div class="seg four">${qb('auto','Auto')}${qb('conserve','Conserve')}${qb('normal','Normal')}${qb('overdrive','Overdrive')}</div>
-    ${stage<2?'<p class="hint">Laying modes unlock after the first winter. Tell her where to lay by painting brood cells in the Hive tab.</p>'
-      :'<p class="hint">Auto laying unlocks when you found a second hive. Until then, paint brood cells in the Hive tab to choose where she lays.</p>'}
+    ${owns('qmodes')?`<div class="seg">${qb('conserve','Conserve')}${qb('normal','Normal')}${qb('overdrive','Overdrive')}</div>
+      <p class="hint">The Auto queen opens in Upgrades with your second hive. Until then, paint brood cells in the Hive tab to choose where she lays.</p>`
+      :`<p class="hint">${upOpen(upById('qmodes'))?'Laying modes are open in Upgrades.':'Laying modes open in Upgrades after your first winter.'} Tell her where to lay by painting brood cells in the Hive tab.</p>`}
     </section>`;
     G.hives.forEach((hv,i)=>{h+=swarmCard(hv,i);});
     }
@@ -446,7 +441,7 @@ function renderColony(e){
         <div class="kv"><span>Progress</span><b>${G.deepDone||0} / ${n} cells</b></div>
         <div class="kv"><span>Wax still needed</span><b>${f1(left*cost)} lb honey</b></div>
         <div class="kv"><span>Time with ${G.builders} builder${G.builders===1?'':'s'}</span><b>${rate?`about ${Math.ceil(left/rate)} days`:'needs builders'}</b></div>
-        ${btn(G.deepen?'Pause deepening':'Start deepening','deepen','','wide')}
+        ${owns('a_deep')?`<p class="note">${G.deepen?'The builders are deepening on their own.':'The builders deepen on their own once the comb is full size.'}</p>`:btn(G.deepen?'Pause deepening':'Start deepening','deepen','','wide')}
         <p class="hint">While deepening, builders don’t add new comb. The work rests in winter.</p>`;
     }
     h+=`</section>`;
@@ -454,8 +449,7 @@ function renderColony(e){
 
     if(tab==='queen'){
     h+=`<section class="card"><h3>${G._colonyName||'Your Colony'}</h3>
-    <div class="kv"><span>Level</span><b>${stage} · ${LEVELS[stage].name}</b></div>
-    ${btn('See progress and levels','progress','','wide')}
+    ${btn('See records','progress','','wide')}
     </section>`;
     h+=`<section class="card"><h3>Hives <span class="sub">${G.hives.length} / ${MAX_HIVES}</span></h3>
     ${G.hives.map((hv,i)=>`<div class="row"><div class="row-top"><span class="rname">${hv.name}</span><span class="rnum">${hv.bees}</span></div>
@@ -464,33 +458,18 @@ function renderColony(e){
     </section>`;
     }
 
-    $('ctabs').innerHTML=CTABS.map(([v,l])=>btn(v==='queen'&&stage>=4?'Swarms':l,'ctab',`data-v="${v}"`,tab===v?'on':'')).join('');
+    $('ctabs').innerHTML=CTABS.map(([v,l])=>btn(v==='queen'&&aq?'Swarms':l,'ctab',`data-v="${v}"`,tab===v?'on':'')).join('');
     $('cbody').innerHTML=h;
     if(_lastCtab!==tab){$('cbody').scrollTop=0;_lastCtab=tab;}
 }
 
-// ── PROGRESS SCREEN ───────────────────────────────────────────────────────────
+// ── RECORDS SCREEN ────────────────────────────────────────────────────────────
 function renderProgress(){
-    const L=LEVELS[G._lvl],nx=LEVELS[G._lvl+1];
-    const needRow=([l,v,t])=>`<div class="kv"><span>${l}</span><b class="${v>=t?'good':''}">${Math.min(v,t)} / ${t}</b></div>${bar(v/t*100,v>=t?'greenbar':'')}`;
-    let h=`<section class="card"><div class="pl-n">Level ${G._lvl}</div><h3 class="pl-name">${L.name}</h3>
-      ${G._colonyName?`<p class="hint">${G._colonyName}</p>`:''}
-      ${nx?`<div class="lv-h">Next: Level ${G._lvl+1}, ${nx.name}</div>${nx.need().map(needRow).join('')}`
-          :'<p class="hint">You have reached the top level for now. More levels will be added as the game grows.</p>'}
-    </section>`;
-    h+=`<section class="card"><h3>Levels</h3>${LEVELS.slice(1).map((v,i)=>{const n=i+1,st=n<G._lvl?'done':n===G._lvl?'cur':'lock';
-        return`<div class="lvrow ${st}"><div class="lvbadge">${st==='done'?'✓':n}</div><div>
-          <div class="rname">${v.name}</div>
-          ${n>1?`<div class="rdesc">Needs: ${v.need().map(([l,,t])=>`${l} ${t}`).join(' · ')}</div>`:'<div class="rdesc">Where every colony begins</div>'}
-          <div class="rdesc">Opens: ${v.opens.join(' · ')}</div>
-          ${v.inst?`<div class="rdesc lvi">Hive instinct: ${v.inst}${v.soon?' (next update)':''}</div>`:''}
-        </div></div>`;}).join('')}
-      <div class="lvrow lock"><div class="lvbadge">…</div><div><div class="rdesc">More levels come as the colony grows.</div></div></div>
-    </section>`;
-    const ins=instincts();
-    h+=`<section class="card"><h3>Hive instincts <span class="sub">jobs the bees now do on their own</span></h3>
-      ${ins.length?ins.map(v=>`<div class="row"><div class="rname">${v.inst}${v.soon?' <span class="sub">(arrives next update)</span>':''}</div><div class="rdesc">${v.instD}</div></div>`).join('')
-        :'<p class="hint">None yet. The first one, the Auto queen, arrives at Level 4.</p>'}
+    let h=G._colonyName?`<section class="card"><h3 class="pl-name">${G._colonyName}</h3><p class="hint">Year ${G.year}, ${G.season}</p></section>`:'';
+    const run=UPG.filter(u=>owns(u.id));
+    h+=`<section class="card"><h3>Upgrades bought <span class="sub">${run.length} / ${UPG.length}</span></h3>
+      ${run.length?run.map(u=>`<div class="kv"><span>${u.name}</span><b class="good">on</b></div>`).join(''):'<p class="hint">None yet. The first ones open after your first winter.</p>'}
+      ${btn('Open Upgrades','progshop','','wide')}
     </section>`;
     const p=restorationPct(),r=landRank();
     h+=`<section class="card"><h3>Land healing <span class="sub">${STG[r]}</span></h3>
@@ -508,12 +487,12 @@ function renderProgress(){
     const LR=lifeRec();
     h+=`<section class="card"><h3>Lifetime record <span class="sub">every colony you have played</span></h3>
       <div class="kv"><span>Colonies played</span><b>${LR.runs}</b></div>
-      <div class="kv"><span>Highest level</span><b>${LR.lvl}</b></div>
+      <div class="kv"><span>Most upgrades bought</span><b>${LR.ups}</b></div>
       <div class="kv"><span>Most hives</span><b>${LR.hives}</b></div>
       <div class="kv"><span>Most bees at once</span><b>${LR.bees}</b></div>
       <div class="kv"><span>Most winters survived</span><b>${LR.years}</b></div>
       ${btn('Replay from the beginning','replay','','wide danger')}
-      <p class="hint">Starts a fresh map at Level 1. This colony ends, and the lifetime record stays.</p>
+      <p class="hint">Starts a fresh map with nothing bought. This colony ends, and the lifetime record stays.</p>
     </section>`;
     $('pbody').innerHTML=h;
 }
@@ -551,7 +530,7 @@ function renderPanel(e){
               <div class="kv"><span>Trip</span><b>${s.n?`about ${Math.ceil(HEX_WORK*hexes.length/s.n)} days`:'no bees free'}</b></div>
               ${G.season==='Winter'?'<p class="note warn">Scouts stay home in winter.</p>':''}
               ${btn(`Send ${s.n} scout${s.n===1?'':'s'}`,'tripgo',`data-k="${s.k}" ${s.n&&G.season!=='Winter'?'':'disabled'}`,'wide')}
-              <p class="hint">Each hex is 6 bee-days of work: 6 scouts map a ${hexes.length}-hex territory in ${Math.ceil(HEX_WORK*hexes.length/6)} days.${instinctOn()?'':' Scouts must be idle bees.'}</p>`;
+              <p class="hint">Each hex is 6 bee-days of work: 6 scouts map a ${hexes.length}-hex territory in ${Math.ceil(HEX_WORK*hexes.length/6)} days.${jobAuto('foragers')?'':' Scouts must be idle bees.'}</p>`;
         }
         if(window._S)window._S.hlPatch(hl,s.k);
     }else if(s.kind==='cell'){
@@ -586,7 +565,7 @@ function renderPanel(e){
         }else if(t.type==='DEAD_ZONE'){
             const p=G.restore[k]||0,n=paTotal(k);
             body=`<p class="desc">${d.desc}</p>${bar(p,'greenbar')}<p class="note">${~~p}% restored</p>`+
-              (G._lvl<2?`<p class="note warn">Pollinators open at Level 2, after your first winter.</p>`:
+              (!owns('poll')?`<p class="note warn">${upOpen(upById('poll'))?'Buy Pollinators in Upgrades to heal it.':'Pollinators open in Upgrades after your first winter.'}</p>`:
                !paHives(k).length?`<p class="note warn">Out of reach of every hive. Reach grows with hive size.</p>`:
                G.season==='Winter'?`<p class="note">Pollinators rest at home in winter.</p>`:
                `<div class="row"><div class="row-top"><span class="rname">Pollinators</span><span class="rnum">${n}</span></div><div class="rdesc">From the closest hive that can reach it</div>${steps('pa',`data-k="${k}"`)}</div>`);
@@ -602,7 +581,7 @@ function renderPanel(e){
             <div class="kv"><span>Each forager brings</span><b>${y.toFixed(2)} lb nectar/day</b></div>
             <div class="kv"><span>Field is feeding</span><b class="${tileForagers(k)>tileSlots(k)?'bad':''}">${tileForagers(k)} / ${tileSlots(k)} foragers</b></div>`+
             (!ok?`<p class="note warn">Out of range. Your bees reach ${G.frad} hex${G.frad>1?'es':''}; range grows at 100 bees.</p>`:
-            instinctOn()?`<div class="kv"><span>Foragers here</span><b>${n}</b></div><p class="hint">The hives send their own foragers to the best open fields each day.</p>`:
+            jobAuto('foragers')?`<div class="kv"><span>Foragers here</span><b>${n}</b></div><p class="hint">The hives send their own foragers to the best open fields each day.</p>`:
             `<div class="row"><div class="row-top"><span class="rname">Foragers here</span><span class="rnum">${n}</span></div>
              <div class="rdesc">${f1(y*n)} lb nectar/day · ${idle()} idle bees at home</div>${steps('fa',`data-k="${k}"`)}</div>
              ${btn('Recall all','farecall',`data-k="${k}" ${n?'':'disabled'}`,'wide ghost')}`)+

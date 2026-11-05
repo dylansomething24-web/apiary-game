@@ -19,6 +19,7 @@ function tick(){
         const prev=G.season;G.season=ns;flashSeason(ns);
         if(prev==='Winter'){
             G._wintersS++;
+            if(G._wintersS===1&&!G._colonyName){G._colonyName=genColonyName();setTimeout(()=>toast(`Your colony has known cold and kept its warmth. It is now known as ${G._colonyName}.`,'mile'),2500);}
             G.hives.forEach(h=>{h._wW=false;h._w82=false;});
             toast('Spring. The queen begins laying again.','green');
             if(G._kDue&&!G.kp)setTimeout(keeperArrive,1800);
@@ -31,7 +32,7 @@ function tick(){
 
     // every hive lives its own day
     const viewing=G.hives[G.ci];
-    G.hives.slice().forEach(h=>{G.ci=G.hives.indexOf(h);_ctx=G.hives.length>1?h.name:null;if(instinctOn())planJobs();hiveDay();});
+    G.hives.slice().forEach(h=>{G.ci=G.hives.indexOf(h);_ctx=G.hives.length>1?h.name:null;if(anyJobAuto())planJobs();hiveDay();});
     _ctx=null;
     if(G.kp)keeperDay();
     tripsDay();
@@ -55,8 +56,8 @@ function tick(){
         if(!(G.year===1&&G.day<20)&&Math.random()<.65){const h=G.hives[~~(Math.random()*G.hives.length)];withHive(h,threat);}
     }
 
-    checkLevel();checkLand();
-    if(G._lvl>=5&&!G.kp&&!G._kDue)G._kDue=true;   // the beekeeper comes the next spring
+    checkShop();checkLand();
+    if(G._maxHives>=3&&!G.kp&&!G._kDue)G._kDue=true;   // the beekeeper comes the spring after the 3rd hive
     checkMS();Snd.setVol();save();
     if(window._S){window._S.refresh();if(H()._hIn>0.2&&G.view==='map')window._S.burstForage();}
     renderAll(true);
@@ -175,7 +176,7 @@ function hiveDay(){
     rebalance();
 
     // Pollinators restore dead zones
-    const bonus=G._lvl>=3?1.2:1;
+    const bonus=owns('poll2')?1.2:1;
     Object.entries(G.pa).forEach(([k,n])=>{
         const t=G.tiles[k];if(!t||t.type!=='DEAD_ZONE'){delete G.pa[k];return;}
         G.restore[k]=Math.min(100,(G.restore[k]||0)+n*PA_RATE*bonus);
@@ -347,7 +348,7 @@ function tripDays(t){const n=tripBees(t);return n?Math.ceil(tripLeft(t)/n):0;}
 function tripPct(t){return t.total?Math.min(100,t.work/(t.total*HEX_WORK)*100):100;}
 // bees hive h could send right now
 function scoutRoom(h){
-    return withHive(h,()=>Math.max(0,Math.min(SCOUT_CAP-scoutTotal(),idle()+(instinctOn()?foragerTotal():0))));
+    return withHive(h,()=>Math.max(0,Math.min(SCOUT_CAP-scoutTotal(),idle()+(jobAuto('foragers')?foragerTotal():0))));
 }
 function scoutRoomAll(){return G.hives.reduce((a,h)=>a+scoutRoom(h),0);}
 // pull n scouts for trip t, closest hive first (or back from the hives in `from`); returns how many went
@@ -358,7 +359,7 @@ function pullScouts(t,n,from){
     for(const h of hs){
         const want=from?Math.min(t.want[h.id]||0,n-sent):n-sent;if(want<=0)continue;
         const m=Math.min(want,scoutRoom(h));if(m<=0)continue;
-        withHive(h,()=>{if(instinctOn())freeForagers(m);G.scouts.push({t:t.id,n:m});});
+        withHive(h,()=>{if(jobAuto('foragers'))freeForagers(m);G.scouts.push({t:t.id,n:m});});
         if(!from)t.want[h.id]=m;
         sent+=m;
     }
@@ -417,7 +418,7 @@ function springOut(){
         const w=h._paW||{};h._paW=null;
         Object.entries(w).forEach(([k,m])=>{
             const t=G.tiles[k];if(!t||t.type!=='DEAD_ZONE')return;
-            withHive(h,()=>{if(instinctOn())freeForagers(m);const c=Math.min(m,idle());if(c>0){G.pa[k]=(G.pa[k]||0)+c;n+=c;}});
+            withHive(h,()=>{if(jobAuto('foragers'))freeForagers(m);const c=Math.min(m,idle());if(c>0){G.pa[k]=(G.pa[k]||0)+c;n+=c;}});
         });
     });
     if(n)toast(`${n} scouts and pollinators head back out`,'green');
@@ -440,7 +441,7 @@ function paAdd(k,n){
     let left=n;
     for(const h of hs){
         if(left<=0)break;
-        withHive(h,()=>{if(instinctOn())freeForagers(left);const m=Math.min(left,idle());if(m>0){G.pa[k]=(G.pa[k]||0)+m;left-=m;}});
+        withHive(h,()=>{if(jobAuto('foragers'))freeForagers(left);const m=Math.min(left,idle());if(m>0){G.pa[k]=(G.pa[k]||0)+m;left-=m;}});
     }
     if(left===n)toast('No idle bees in the hives that can reach it','warn');
 }
@@ -456,16 +457,16 @@ function paRemove(k,n){
 function collapse(){
     const set=(id,v)=>document.getElementById(id).textContent=v;
     set('gm-year',`Year ${G.year}, ${G.season}`);set('gm-peak',G._peakB);set('gm-honey',G._totH.toFixed(0)+' lb');
-    set('gm-winters',G._wintersS);set('gm-tiles',G._tilesRestored);set('gm-stage',`Level ${G._lvl}, ${LEVELS[G._lvl].name}`);
+    set('gm-winters',G._wintersS);set('gm-tiles',G._tilesRestored);set('gm-stage',`${Object.keys(G.up).length} of ${UPG.length}`);
     set('gm-name',G._colonyName?`“${G._colonyName}”`:'');
     localStorage.removeItem(SK);ovShow('ov-g');
 }
 
 // ── QUEEN ─────────────────────────────────────────────────────────────────────
 function setQueenMode(m){
-    if(G._lvl>=4){toast('Your queens follow the seasons on their own now','info');return;}
-    if(G._lvl<2){toast('Laying modes open at Level 2, after your first winter','warn');return;}
-    if(m==='auto'){toast('The Auto queen arrives at Level 4, with your second hive','warn');return;}
+    if(owns('a_queen')){toast('Your queens follow the seasons on their own now','info');return;}
+    if(!owns('qmodes')){toast('Buy Queen laying modes in Upgrades first. They open after your first winter.','warn');return;}
+    if(m==='auto'){toast('Buy the Auto queen in Upgrades. It opens with your second hive.','warn');return;}
     G.qMode=m;
     toast({auto:'The queen follows the seasons — hard in spring, steady in summer, light in fall, resting in winter. She keeps only the brood room she needs.',conserve:'She lays with restraint — 2 eggs a day.',normal:'Her natural pace — 4 eggs a day.',overdrive:'She lays relentlessly — 7 eggs a day.'}[m],'green');
 }
@@ -477,7 +478,7 @@ function prepSwarm(){
 
 // ── SPLITTING INTO A NEW HIVE ─────────────────────────────────────────────────
 function canSplit(){
-    if(G._lvl<3)return{ok:false,reason:'Splitting opens at Level 3, Thriving Colony'};
+    if(!owns('split'))return{ok:false,reason:'Buy Splitting in Upgrades first'};
     if(G.hives.length>=MAX_HIVES)return{ok:false,reason:`The land can hold ${MAX_HIVES} hives at most`};
     if(G.frad<SPLIT_REACH)return{ok:false,reason:`Needs a forage range of ${SPLIT_REACH} tiles (yours is ${G.frad})`};
     if(G.season!=='Spring'&&G.season!=='Summer')return{ok:false,reason:'Colonies only swarm in spring and summer'};
@@ -509,7 +510,7 @@ function doSplit(k){
     const nh=makeHive(t.q,t.r,`Hive ${G.hives.length+1}`,id);
     nh.bees=plan.n;nh.honey=plan.honey;nh.nectar=plan.nectar;
     nh.nurses=Math.max(2,Math.round(plan.n*.12));nh.processors=Math.max(1,Math.round(plan.n*.08));nh.builders=Math.max(1,Math.round(plan.n*.05));
-    nh.qMode=G._lvl>=4?'auto':parent.qMode;nh.frad=plan.n>=100?2:1;
+    nh.qMode=owns('a_queen')?'auto':parent.qMode;nh.frad=plan.n>=100?2:1;
     // the old hive
     parent.bees-=plan.n;parent.honey-=plan.honey;parent.nectar-=plan.nectar;parent.swarm=0;
     withHive(parent,rebalance);
@@ -517,7 +518,7 @@ function doSplit(k){
     t.type='HIVE_BOX';t.stage=3;delete G.restore[k];
     G.hives.forEach(h=>{delete h.fa[k];delete h.pa[k];});
     G.hives.push(nh);
-    checkLevel();
+    checkShop();
     G._ach.sp=true;
     withHive(nh,()=>ACT.autoforage());   // give the new hive a working start
     toast(`A new hive is founded with ${plan.n} bees.${nh.qMode==='auto'?' Its queen lays on her own (Auto).':''}`,'mile');hap([60,30,60,30,100]);
