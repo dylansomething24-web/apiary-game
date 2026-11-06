@@ -72,7 +72,7 @@ function hiveDay(){
     const space=Math.max(0,e.cap-G.honey-G.nectar);
     let nIn=e.nectarIn;
     if(nIn>space+0.001){
-        if(nIn>0&&!(G.kp&&supRoom()>1))warnOnce('full',G.kp?'Storage is full — nectar is being wasted. Put supers on, or pull full ones.':'Storage is full — nectar is being wasted. Add builders or paint storage cells in the Hive.');
+        if(nIn>0&&!(G.kp&&supRoom()>1)&&(G.kp||!jobAuto('builders')))warnOnce('full',G.kp?'Storage is full — nectar is being wasted. Put supers on, or pull full ones.':'Storage is full — nectar is being wasted. Add builders or paint storage cells in the Hive.');
         nIn=space;
     }
     G.nectar+=nIn;G._nIn=nIn;
@@ -81,7 +81,7 @@ function hiveDay(){
     const proc=Math.min(G.nectar,e.procCap);
     G.nectar-=proc;const hIn=proc*PROC_EFF;
     G.honey+=hIn;G._totH+=hIn;G._hIn=hIn;
-    if(e.nectarIn>e.procCap*1.3&&G.nectar>3)warnOnce('proc','Nectar is piling up — assign more processors.');
+    if(!jobAuto('processors')&&e.nectarIn>e.procCap*1.3&&G.nectar>3)warnOnce('proc','Nectar is piling up — assign more processors.');
 
     // Adults eat
     G.honey-=e.adultCost;
@@ -108,7 +108,7 @@ function hiveDay(){
     larvaeCells.slice(fed).forEach(c=>{c.a=-1;c.d=3;starved++;});
     if(starved){
         const why=fed>=e.nurseCap?'not enough nurses':'not enough honey';
-        warnOnce('larva',`${starved} ${starved>1?'larvae':'larva'} died — ${why}.`,4);
+        if(why==='not enough honey'||!jobAuto('nurses'))warnOnce('larva',`${starved} ${starved>1?'larvae':'larva'} died — ${why}.`,4);
     }
 
     // Builders deepen storage cells if told to, otherwise draw new comb (wax costs honey)
@@ -145,7 +145,7 @@ function hiveDay(){
         let n=layNow();
         const empties=Object.entries(G.comb).filter(([k,c])=>c.t==='b'&&c.a<0&&!(c.d>0)&&!c.p).sort((a,b)=>kdist(a[0])-kdist(b[0]));
         for(const[,c]of empties){if(n<=0)break;c.a=0;n--;}
-        if(n>=layNow()&&G.day>3)warnOnce('lay','The queen has no empty brood cells to lay in. Build comb or paint brood cells.',8);
+        if(n>=layNow()&&G.day>3&&!jobAuto('builders'))warnOnce('lay','The queen has no empty brood cells to lay in. Build comb or paint brood cells.',8);
     }
 
     // Natural deaths
@@ -155,7 +155,7 @@ function hiveDay(){
     if(G.kp)eatSupers();
     if(G.honey<0){
         G.honey=0;const s=Math.max(1,Math.floor(G.bees*.05));G.bees-=s;
-        warnOnce('starve',`The colony is starving — ${s} bee${s>1?'s':''} died. Get foragers and processors working.`,3);
+        warnOnce('starve',`The colony is starving — ${s} bee${s>1?'s':''} died.${jobAuto('foragers')&&jobAuto('processors')?'':' Get foragers and processors working.'}`,3);
     }
     G.bees=Math.max(0,G.bees);G._died=died;
     if(G.bees<=20&&G._peakB>30)G._wasLow=true;
@@ -285,7 +285,7 @@ function bear(){
 function robbing(){
     if(G.guards>=guardsNeeded()){toast('Robber bees tried the entrance — your guards turned them away','green');return;}
     const l=Math.min(G.honey,(guardsNeeded()-G.guards)*1.2);G.honey-=l;
-    toast(`Robber bees stole ${l.toFixed(1)} lb of honey — you need more guards`,'warn');
+    toast(`Robber bees stole ${l.toFixed(1)} lb of honey${jobAuto('guards')?'':' — you need more guards'}`,'warn');
 }
 function lateBloom(){const add=Math.min(4,Math.max(0,capacity()-G.honey-G.nectar));G.nectar+=add;toast(`A late bloom — foragers returned heavy (+${add.toFixed(1)} lb nectar)`,'green');}
 function goodWeather(){
